@@ -1,20 +1,17 @@
-from flask import Flask, request, redirect, url_for, session, send_file
+from flask import Flask, request, redirect, url_for, session
 import json, os
 from datetime import datetime
-import csv
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
 }
 
-# 📦 DATA
 def load_data():
     if os.path.exists(FILE):
         with open(FILE, "r") as f:
@@ -25,7 +22,6 @@ def save_data(data):
     with open(FILE, "w") as f:
         json.dump(data, f)
 
-# 🔢 generar código cliente
 def generate_code(data):
     return f"C{len(data)+1:04d}"
 
@@ -41,51 +37,16 @@ def login():
             session["user"] = user
             return redirect(url_for("home"))
 
-        return "<h3>❌ Login incorrecto</h3>"
-
     return """
-    <style>
-        body {
-            font-family: Arial;
-            background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
-            url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Flag_of_Canada.svg/1280px-Flag_of_Canada.svg.png');
-            background-size: cover;
-            background-position: center;
-            text-align:center;
-            padding-top:100px;
-        }
-        .box {
-            background:white;
-            padding:25px;
-            width:300px;
-            margin:auto;
-            border-radius:10px;
-        }
-        input {
-            width:90%;
-            padding:10px;
-            margin:5px 0;
-        }
-        button {
-            padding:10px;
-            background:#c0392b;
-            color:white;
-            border:none;
-            border-radius:5px;
-        }
-    </style>
-
-    <div class="box">
-        <h2>🏢 Office Thinking</h2>
-        <form method="POST">
-            <input name="user" placeholder="Usuario"><br>
-            <input type="password" name="password" placeholder="Contraseña"><br>
-            <button>Entrar</button>
-        </form>
-    </div>
+    <h2>Office Thinking</h2>
+    <form method="POST">
+        <input name="user" placeholder="Usuario">
+        <input type="password" name="password" placeholder="Contraseña">
+        <button>Entrar</button>
+    </form>
     """
 
-# 🏠 HOME (CALENDARIO + CRM)
+# 🏠 HOME
 @app.route("/", methods=["GET","POST"])
 def home():
 
@@ -94,7 +55,6 @@ def home():
 
     data = load_data()
 
-    # ➕ crear cliente
     if request.method == "POST":
         data.append({
             "codigo": generate_code(data),
@@ -105,14 +65,18 @@ def home():
             "fecha": request.form.get("fecha"),
             "accion": request.form.get("accion"),
             "notas": request.form.get("notas"),
+
+            # 💰 NUEVOS CAMPOS
+            "monto": request.form.get("monto"),
+            "estado_pago": request.form.get("estado_pago"),
+
             "user": session.get("user")
         })
         save_data(data)
 
     hoy = datetime.now().strftime("%Y-%m-%d")
 
-    # ordenar por fecha
-    data_sorted = sorted(data, key=lambda x: x.get("fecha",""))
+    total_pendiente = 0
 
     html = f"""
     <style>
@@ -121,7 +85,6 @@ def home():
             background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
             url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Flag_of_Canada.svg/1280px-Flag_of_Canada.svg.png');
             background-size: cover;
-            background-position: center;
             margin:0;
         }}
 
@@ -140,12 +103,11 @@ def home():
             padding:15px;
             margin:10px 0;
             border-radius:10px;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
         }}
 
-        .hoy {{ border-left:5px solid green; }}
-        .atrasado {{ border-left:5px solid red; }}
-        .futuro {{ border-left:5px solid orange; }}
+        .pagado {{ border-left:5px solid green; }}
+        .pendiente {{ border-left:5px solid orange; }}
+        .vencido {{ border-left:5px solid red; }}
 
         input, select, textarea {{
             padding:8px;
@@ -159,18 +121,11 @@ def home():
             border:none;
             border-radius:5px;
         }}
-
-        a {{
-            margin-left:10px;
-            text-decoration:none;
-            color:white;
-        }}
     </style>
 
     <header>
-        <h2>🏢 Office Thinking</h2>
+        <h2>🏢 Office Thinking CRM</h2>
         Usuario: {session.get("user")}
-        <a href="/logout">Cerrar sesión</a>
     </header>
 
     <div class="container">
@@ -183,6 +138,14 @@ def home():
         <input name="email" placeholder="Email"><br>
         <input type="date" name="fecha"><br>
 
+        <input name="monto" placeholder="Monto a pagar ($)"><br>
+
+        <select name="estado_pago">
+            <option>Pendiente</option>
+            <option>Pagado</option>
+            <option>Vencido</option>
+        </select><br>
+
         <select name="accion">
             <option>Llamar</option>
             <option>Enviar correo</option>
@@ -193,28 +156,32 @@ def home():
         <button>Guardar</button>
     </form>
 
-    <h3>📅 Calendario de clientes</h3>
+    <h3>📋 Clientes y pagos</h3>
     """
 
-    for i, c in enumerate(data_sorted):
+    for i, c in enumerate(data):
 
-        fecha = c.get("fecha")
+        estado = c.get("estado_pago","Pendiente")
 
-        clase = "futuro"
-        etiqueta = "📅 FUTURO"
+        if estado == "Pagado":
+            clase = "pagado"
+        elif estado == "Vencido":
+            clase = "vencido"
+        else:
+            clase = "pendiente"
 
-        if fecha == hoy:
-            clase = "hoy"
-            etiqueta = "🔥 HOY"
-        elif fecha and fecha < hoy:
-            clase = "atrasado"
-            etiqueta = "⚠️ ATRASADO"
+        if estado != "Pagado":
+            try:
+                total_pendiente += float(c.get("monto") or 0)
+            except:
+                pass
 
         html += f"""
         <div class="card {clase}">
             <b>{c.get('codigo')}</b> - {c['nombre']}<br>
-            {etiqueta}<br>
-            📅 {fecha}<br>
+            💰 Monto: {c.get('monto','0')}<br>
+            📊 Estado pago: {estado}<br>
+            📅 {c.get('fecha')}<br>
             📞 {c.get('accion')}<br>
             📱 {c.get('celular','')}<br>
             📧 {c.get('email','')}<br>
@@ -226,7 +193,12 @@ def home():
         </div>
         """
 
-    html += "</div>"
+    html += f"""
+    <hr>
+    <h3>💰 Total pendiente de cobro: ${total_pendiente}</h3>
+    </div>
+    """
+
     return html
 
 # ✏️ EDITAR
@@ -246,6 +218,8 @@ def edit(index):
         data[index]["fecha"] = request.form.get("fecha")
         data[index]["accion"] = request.form.get("accion")
         data[index]["notas"] = request.form.get("notas")
+        data[index]["monto"] = request.form.get("monto")
+        data[index]["estado_pago"] = request.form.get("estado_pago")
 
         save_data(data)
         return redirect(url_for("home"))
@@ -260,6 +234,16 @@ def edit(index):
         Celular: <input name="celular" value="{c.get('celular','')}"><br>
         Email: <input name="email" value="{c.get('email','')}"><br>
         Fecha: <input type="date" name="fecha" value="{c.get('fecha','')}"><br>
+
+        Monto: <input name="monto" value="{c.get('monto','')}"><br>
+
+        Estado pago:
+        <select name="estado_pago">
+            <option>{c.get('estado_pago','Pendiente')}</option>
+            <option>Pagado</option>
+            <option>Pendiente</option>
+            <option>Vencido</option>
+        </select><br>
 
         Acción:
         <select name="accion">
@@ -278,14 +262,12 @@ def edit(index):
 # 🗑️ ELIMINAR
 @app.route("/delete/<int:index>")
 def delete(index):
-
     if session.get("logged"):
         data = load_data()
         if 0 <= index < len(data):
             data.pop(index)
             save_data(data)
-
-    return redirect(url_for("home"))
+    return redirect("/")
 
 # 🚪 LOGOUT
 @app.route("/logout")

@@ -8,7 +8,6 @@ app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
@@ -24,6 +23,10 @@ def load_data():
 def save_data(data):
     with open(FILE, "w") as f:
         json.dump(data, f)
+
+# 🔢 generar código cliente
+def generate_code(data):
+    return f"C{len(data)+1:04d}"
 
 # 🔐 LOGIN
 @app.route("/login", methods=["GET","POST"])
@@ -56,7 +59,6 @@ def login():
             width:300px;
             margin:auto;
             border-radius:10px;
-            box-shadow:0 2px 10px rgba(0,0,0,0.2);
         }
         input {
             width:90%;
@@ -82,23 +84,23 @@ def login():
     </div>
     """
 
-# 📄 EXPORT CSV (SEGURO PARA RENDER)
+# 📄 EXPORT CSV
 @app.route("/export")
 def export():
     data = load_data()
-
     file = "clientes.csv"
 
     with open(file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-
-        # encabezados
-        writer.writerow(["Nombre","Servicio","Fecha","Accion","Notas","Usuario"])
+        writer.writerow(["Codigo","Nombre","Servicio","Celular","Email","Fecha","Accion","Notas","Usuario"])
 
         for c in data:
             writer.writerow([
+                c.get("codigo",""),
                 c.get("nombre",""),
                 c.get("servicio",""),
+                c.get("celular",""),
+                c.get("email",""),
                 c.get("fecha",""),
                 c.get("accion",""),
                 c.get("notas",""),
@@ -117,14 +119,21 @@ def home():
     data = load_data()
 
     if request.method == "POST":
+
+        code = generate_code(data)
+
         data.append({
+            "codigo": code,
             "nombre": request.form.get("nombre"),
             "servicio": request.form.get("servicio"),
+            "celular": request.form.get("celular"),
+            "email": request.form.get("email"),
             "fecha": request.form.get("fecha"),
             "accion": request.form.get("accion"),
             "notas": request.form.get("notas"),
             "user": session.get("user")
         })
+
         save_data(data)
 
     hoy = datetime.now().strftime("%Y-%m-%d")
@@ -155,7 +164,6 @@ def home():
             padding:15px;
             margin:10px 0;
             border-radius:10px;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
         }}
 
         input, select, textarea {{
@@ -170,10 +178,6 @@ def home():
             border:none;
             border-radius:5px;
         }}
-
-        a {{
-            margin-left:10px;
-        }}
     </style>
 
     <header>
@@ -185,10 +189,12 @@ def home():
 
     <div class="container">
 
-    <h3>➕ Nuevo seguimiento</h3>
+    <h3>➕ Nuevo cliente</h3>
     <form method="POST">
         <input name="nombre" placeholder="Nombre"><br>
         <input name="servicio" placeholder="Servicio"><br>
+        <input name="celular" placeholder="Celular"><br>
+        <input name="email" placeholder="Email"><br>
         <input type="date" name="fecha"><br>
 
         <select name="accion">
@@ -201,7 +207,7 @@ def home():
         <button>Guardar</button>
     </form>
 
-    <h3>📅 Seguimiento</h3>
+    <h3>📋 Clientes</h3>
     """
 
     for c in data:
@@ -214,7 +220,10 @@ def home():
 
         html += f"""
         <div class="card">
-            <b>{c['nombre']}</b> - {c['servicio']}<br>
+            <b>{c.get('codigo')}</b> - {c['nombre']}<br>
+            Servicio: {c['servicio']}<br>
+            📱 {c.get('celular','')}<br>
+            📧 {c.get('email','')}<br>
             📅 {c.get('fecha')} {estado}<br>
             📞 {c.get('accion')}<br>
             📝 {c.get('notas')}<br>
@@ -225,7 +234,6 @@ def home():
     html += "</div>"
     return html
 
-# 🚪 LOGOUT
 @app.route("/logout")
 def logout():
     session.clear()

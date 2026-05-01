@@ -10,7 +10,6 @@ FILE = "data.json"
 USER = "admin"
 PASS = "1234"
 
-# 📦 cargar datos
 def load_data():
     if os.path.exists(FILE):
         with open(FILE, "r") as f:
@@ -21,7 +20,7 @@ def save_data(data):
     with open(FILE, "w") as f:
         json.dump(data, f)
 
-# 🔐 LOGIN
+# LOGIN
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
@@ -37,10 +36,10 @@ def login():
 
     return """
     <style>
-        body { font-family: Arial; background:#f4f6f8; text-align:center; padding-top:100px; }
-        .box { background:white; padding:20px; width:300px; margin:auto; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); }
-        input { width:90%; padding:8px; margin:5px 0; }
-        button { padding:8px 15px; background:#2c3e50; color:white; border:none; border-radius:5px; }
+        body { font-family: Arial; background:#eef1f5; text-align:center; padding-top:100px; }
+        .box { background:white; padding:25px; width:300px; margin:auto; border-radius:10px; }
+        input { width:90%; padding:10px; margin:5px 0; }
+        button { padding:10px; background:#2c3e50; color:white; border:none; border-radius:5px; }
     </style>
 
     <div class="box">
@@ -53,7 +52,7 @@ def login():
     </div>
     """
 
-# 🏠 PANEL PRINCIPAL
+# HOME
 @app.route("/", methods=["GET", "POST"])
 def home():
 
@@ -62,26 +61,32 @@ def home():
 
     data = load_data()
 
-    # ➕ agregar cliente
     if request.method == "POST":
         nombre = request.form.get("nombre")
         servicio = request.form.get("servicio")
+        telefono = request.form.get("telefono")
+        email = request.form.get("email")
 
         if nombre and servicio:
-            data.append({"nombre": nombre, "servicio": servicio})
+            data.append({
+                "nombre": nombre,
+                "servicio": servicio,
+                "telefono": telefono,
+                "email": email
+            })
             save_data(data)
 
     search = request.args.get("search")
 
     html = """
     <style>
-        body { font-family: Arial; background:#eef1f5; margin:0; padding:0; }
+        body { font-family: Arial; background:#eef1f5; margin:0; }
         header { background:#2c3e50; color:white; padding:15px; }
         .container { padding:20px; }
-        .card { background:white; padding:12px; margin:10px 0; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-        input { padding:6px; margin:3px; }
-        button { padding:6px 10px; }
-        a { text-decoration:none; padding:4px 8px; border-radius:4px; margin-left:5px; }
+        .card { background:white; padding:15px; margin:10px 0; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+        input { padding:8px; margin:5px; }
+        button { padding:8px 12px; }
+        a { text-decoration:none; padding:5px 8px; border-radius:5px; margin-left:5px; }
         .del { background:#e74c3c; color:white; }
         .edit { background:#f39c12; color:white; }
         .logout { float:right; color:white; }
@@ -94,11 +99,13 @@ def home():
 
     <div class="container">
 
-    <h3>➕ Agregar cliente</h3>
+    <h3>➕ Nuevo cliente</h3>
     <form method="POST">
         <input name="nombre" placeholder="Nombre">
         <input name="servicio" placeholder="Servicio">
-        <button>Agregar</button>
+        <input name="telefono" placeholder="Teléfono">
+        <input name="email" placeholder="Email">
+        <button>Guardar</button>
     </form>
 
     <h3>🔍 Buscar</h3>
@@ -118,7 +125,11 @@ def home():
 
         html += f"""
         <div class="card">
-            <b>{c['nombre']}</b> - {c['servicio']}<br><br>
+            <b>{c['nombre']}</b><br>
+            Servicio: {c['servicio']}<br>
+            Teléfono: {c.get('telefono','')}<br>
+            Email: {c.get('email','')}<br><br>
+
             <a class="del" href="/delete/{i}">Eliminar</a>
             <a class="edit" href="/edit/{i}">Editar</a>
         </div>
@@ -127,7 +138,7 @@ def home():
     html += "</div>"
     return html
 
-# ❌ eliminar
+# DELETE
 @app.route("/delete/<int:index>")
 def delete(index):
     if session.get("logged"):
@@ -137,7 +148,7 @@ def delete(index):
             save_data(data)
     return redirect(url_for("home"))
 
-# ✏️ editar
+# EDIT
 @app.route("/edit/<int:index>", methods=["GET", "POST"])
 def edit(index):
 
@@ -147,10 +158,12 @@ def edit(index):
     data = load_data()
 
     if request.method == "POST":
-        nombre = request.form.get("nombre")
-        servicio = request.form.get("servicio")
-
-        data[index] = {"nombre": nombre, "servicio": servicio}
+        data[index] = {
+            "nombre": request.form.get("nombre"),
+            "servicio": request.form.get("servicio"),
+            "telefono": request.form.get("telefono"),
+            "email": request.form.get("email")
+        }
         save_data(data)
         return redirect(url_for("home"))
 
@@ -159,13 +172,15 @@ def edit(index):
     return f"""
     <h2>Editar cliente</h2>
     <form method="POST">
-        <input name="nombre" value="{c['nombre']}"><br><br>
-        <input name="servicio" value="{c['servicio']}"><br><br>
+        Nombre: <input name="nombre" value="{c['nombre']}"><br><br>
+        Servicio: <input name="servicio" value="{c['servicio']}"><br><br>
+        Teléfono: <input name="telefono" value="{c.get('telefono','')}"><br><br>
+        Email: <input name="email" value="{c.get('email','')}"><br><br>
         <button>Guardar</button>
     </form>
     """
 
-# 🚪 logout
+# LOGOUT
 @app.route("/logout")
 def logout():
     session.clear()
@@ -173,5 +188,3 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-
-    

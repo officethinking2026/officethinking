@@ -84,34 +84,51 @@ def home():
 
     hoy = datetime.now().strftime("%Y-%m-%d")
 
-    # 📊 MÉTRICAS GENERALES
+    # 📊 DASHBOARD GENERAL
     total = len(data)
     hoy_count = 0
     atrasados = 0
     futuros = 0
 
+    # 💰 FINANZAS
     total_pagado = 0
     total_pendiente = 0
     total_vencido = 0
 
+    # 🧠 INTELIGENCIA
+    urgentes = 0
+    proximos = 0
+    normales = 0
+
     for c in data:
-        f = c.get("fecha")
+
+        fecha = c.get("fecha")
         estado = c.get("estado_pago","Pendiente")
         monto = float(c.get("monto") or 0)
 
-        if f == hoy:
+        # calendario
+        if fecha == hoy:
             hoy_count += 1
-        elif f and f < hoy:
+        elif fecha and fecha < hoy:
             atrasados += 1
         else:
             futuros += 1
 
+        # finanzas
         if estado == "Pagado":
             total_pagado += monto
         elif estado == "Vencido":
             total_vencido += monto
         else:
             total_pendiente += monto
+
+        # inteligencia
+        if estado == "Vencido":
+            urgentes += 1
+        elif fecha and fecha <= hoy:
+            proximos += 1
+        else:
+            normales += 1
 
     html = f"""
     <style>
@@ -154,9 +171,19 @@ def home():
             border-radius:10px;
         }}
 
-        .pagado {{ border-left:5px solid green; }}
-        .pendiente {{ border-left:5px solid orange; }}
-        .vencido {{ border-left:5px solid red; }}
+        .urgente {{
+            border-left:5px solid red;
+            background:#ffe5e5;
+        }}
+
+        .proximo {{
+            border-left:5px solid orange;
+            background:#fff4e5;
+        }}
+
+        .normal {{
+            border-left:5px solid green;
+        }}
 
         input,select,textarea {{
             padding:8px;
@@ -175,7 +202,6 @@ def home():
     <header>
         <h2>🏢 Office Thinking CRM</h2>
         Usuario: {session.get("user")}
-        <a href="/logout">Salir</a>
     </header>
 
     <div class="container">
@@ -195,7 +221,16 @@ def home():
         <div class="box">💵 Pagado<br><b>${total_pagado}</b></div>
         <div class="box">🟡 Pendiente<br><b>${total_pendiente}</b></div>
         <div class="box">🔴 Vencido<br><b>${total_vencido}</b></div>
-        <div class="box">📊 Flujo<br><b>${total_pagado - total_vencido}</b></div>
+        <div class="box">📊 Neto<br><b>${total_pagado - total_vencido}</b></div>
+    </div>
+
+    <h3>🧠 Panel inteligente</h3>
+
+    <div class="dashboard">
+        <div class="box">🔴 Urgentes<br><b>{urgentes}</b></div>
+        <div class="box">🟡 Acción pronto<br><b>{proximos}</b></div>
+        <div class="box">🟢 Normales<br><b>{normales}</b></div>
+        <div class="box">⚡ Sistema activo</div>
     </div>
 
     <h3>➕ Nuevo cliente</h3>
@@ -231,23 +266,24 @@ def home():
     for i, c in enumerate(data):
 
         estado = c.get("estado_pago","Pendiente")
+        fecha = c.get("fecha")
 
-        if estado == "Pagado":
-            clase = "pagado"
-            etiqueta = "🟢 PAGADO"
-        elif estado == "Vencido":
-            clase = "vencido"
-            etiqueta = "🔴 VENCIDO"
+        if estado == "Vencido":
+            clase = "urgente"
+            etiqueta = "🔴 URGENTE"
+        elif fecha and fecha <= hoy:
+            clase = "proximo"
+            etiqueta = "🟡 ACCIÓN"
         else:
-            clase = "pendiente"
-            etiqueta = "🟡 PENDIENTE"
+            clase = "normal"
+            etiqueta = "🟢 OK"
 
         html += f"""
         <div class="card {clase}">
             <b>{c.get('codigo')}</b> - {c['nombre']}<br>
             {etiqueta}<br>
             💰 {c.get('monto')}<br>
-            📅 {c.get('fecha')}<br>
+            📅 {fecha}<br>
             📱 {c.get('celular')}<br>
             📧 {c.get('email')}<br>
             📝 {c.get('notas')}<br>

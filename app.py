@@ -8,11 +8,13 @@ app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
+# 👥 Usuarios
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
 }
 
+# 📦 DATA
 def load_data():
     if os.path.exists(FILE):
         with open(FILE, "r") as f:
@@ -23,7 +25,7 @@ def save_data(data):
     with open(FILE, "w") as f:
         json.dump(data, f)
 
-# LOGIN
+# 🔐 LOGIN
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
@@ -39,14 +41,33 @@ def login():
     <style>
         body {
             font-family: Arial;
-            background-image: url('https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Canada.svg');
+            background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
+            url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Flag_of_Canada.svg/1280px-Flag_of_Canada.svg.png');
             background-size: cover;
+            background-position: center;
             text-align:center;
             padding-top:100px;
         }
-        .box { background:white; padding:25px; width:300px; margin:auto; border-radius:10px; }
-        input { width:90%; padding:10px; margin:5px 0; }
-        button { padding:10px; background:#c0392b; color:white; border:none; }
+        .box {
+            background:white;
+            padding:25px;
+            width:300px;
+            margin:auto;
+            border-radius:10px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.2);
+        }
+        input {
+            width:90%;
+            padding:10px;
+            margin:5px 0;
+        }
+        button {
+            padding:10px;
+            background:#c0392b;
+            color:white;
+            border:none;
+            border-radius:5px;
+        }
     </style>
 
     <div class="box">
@@ -59,16 +80,18 @@ def login():
     </div>
     """
 
-# EXPORTAR EXCEL
+# 📊 EXPORTAR EXCEL
 @app.route("/export")
 def export():
     data = load_data()
+    if not data:
+        return "No hay datos para exportar"
     df = pd.DataFrame(data)
     file = "clientes.xlsx"
     df.to_excel(file, index=False)
     return send_file(file, as_attachment=True)
 
-# HOME
+# 🏠 HOME
 @app.route("/", methods=["GET","POST"])
 def home():
 
@@ -94,20 +117,59 @@ def home():
     <style>
         body {{
             font-family: Arial;
-            background-image: url('https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Canada.svg');
+            background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
+            url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Flag_of_Canada.svg/1280px-Flag_of_Canada.svg.png');
             background-size: cover;
+            background-position: center;
+            margin:0;
         }}
-        .container {{ background: rgba(255,255,255,0.9); padding:20px; margin:20px; border-radius:10px; }}
-        .card {{ background:white; padding:10px; margin:10px; border-radius:10px; }}
+
+        header {{
+            background:#c0392b;
+            color:white;
+            padding:15px;
+        }}
+
+        .container {{
+            padding:20px;
+        }}
+
+        .card {{
+            background:white;
+            padding:15px;
+            margin:10px 0;
+            border-radius:10px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.1);
+        }}
+
+        input, select, textarea {{
+            padding:8px;
+            margin:5px;
+        }}
+
+        button {{
+            padding:8px 12px;
+            background:#c0392b;
+            color:white;
+            border:none;
+            border-radius:5px;
+        }}
+
+        a {{
+            margin-left:10px;
+        }}
     </style>
 
-    <div class="container">
-    <h2>🏢 Office Thinking</h2>
-    Usuario: {session.get("user")} |
-    <a href="/export">📊 Exportar Excel</a> |
-    <a href="/logout">Cerrar sesión</a>
+    <header>
+        <h2>🏢 Office Thinking</h2>
+        Usuario: {session.get("user")}
+        <a href="/export">📊 Exportar Excel</a>
+        <a href="/logout">Cerrar sesión</a>
+    </header>
 
-    <h3>Nuevo seguimiento</h3>
+    <div class="container">
+
+    <h3>➕ Nuevo seguimiento</h3>
     <form method="POST">
         <input name="nombre" placeholder="Nombre"><br>
         <input name="servicio" placeholder="Servicio"><br>
@@ -119,10 +181,11 @@ def home():
         </select><br>
 
         <textarea name="notas" placeholder="Notas"></textarea><br>
+
         <button>Guardar</button>
     </form>
 
-    <h3>📅 Pendientes</h3>
+    <h3>📅 Seguimiento</h3>
     """
 
     for c in data:
@@ -146,6 +209,7 @@ def home():
     html += "</div>"
     return html
 
+# 🚪 LOGOUT
 @app.route("/logout")
 def logout():
     session.clear()

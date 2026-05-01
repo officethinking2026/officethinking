@@ -1,23 +1,16 @@
-from flask import Flask, request, redirect, url_for, session, Response
-import json, os, csv
+from flask import Flask, request, redirect, url_for, session
+import json, os
 from datetime import datetime, timedelta
-import smtplib
-from email.mime.text import MIMEText
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
 }
-
-# 📩 EMAIL (CONFIG SEGURO)
-EMAIL_SENDER = "TU_CORREO_GMAIL"
-EMAIL_PASSWORD = "TU_APP_PASSWORD"  # ⚠️ NO poner contraseña real aquí
 
 # 📦 DATA
 def load_data():
@@ -33,25 +26,6 @@ def save_data(data):
 def generate_code(data):
     return f"C{len(data)+1:04d}"
 
-# 📩 EMAIL REAL
-def enviar_email(destinatario, asunto, mensaje):
-    try:
-        msg = MIMEText(mensaje)
-        msg["Subject"] = asunto
-        msg["From"] = EMAIL_SENDER
-        msg["To"] = destinatario
-
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, destinatario, msg.as_string())
-        server.quit()
-
-        print("📩 Email enviado a", destinatario)
-
-    except Exception as e:
-        print("❌ Error email:", e)
-
 # 🔐 LOGIN
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -66,7 +40,7 @@ def login():
 
     return """
     <style>
-        body {font-family:Arial;text-align:center;padding-top:100px;background:#f4f4f4;}
+        body{font-family:Arial;text-align:center;padding-top:100px;background:#f4f4f4;}
         input,button{padding:10px;margin:5px;}
     </style>
 
@@ -87,7 +61,9 @@ def home():
 
     data = load_data()
 
-    # ➕ CREAR CLIENTE
+    hoy = datetime.now().strftime("%Y-%m-%d")
+
+    # ➕ CLIENTE
     if request.method == "POST":
         cliente = {
             "codigo": generate_code(data),
@@ -106,52 +82,34 @@ def home():
         data.append(cliente)
         save_data(data)
 
-        # 🔔 EMAIL AUTOMÁTICO SI ESTÁ VENCIDO
-        if cliente["estado_pago"] == "Vencido" and cliente["email"]:
-            enviar_email(
-                cliente["email"],
-                "⚠️ Pago vencido - Office Thinking",
-                f"Hola {cliente['nombre']}, tienes un pago vencido de ${cliente['monto']}."
-            )
-
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    # 📅 CALENDARIO
+    hoy_tareas = []
+    proximos = []
+    vencidos = []
 
     total = len(data)
-    hoy_count = 0
-    atrasados = 0
-    futuros = 0
-
-    total_pagado = 0
-    total_pendiente = 0
-    total_vencido = 0
 
     for c in data:
+
         fecha = c.get("fecha")
-        estado = c.get("estado_pago","Pendiente")
-        monto = float(c.get("monto") or 0)
 
         if fecha == hoy:
-            hoy_count += 1
-        elif fecha and fecha < hoy:
-            atrasados += 1
-        else:
-            futuros += 1
+            hoy_tareas.append(c)
 
-        if estado == "Pagado":
-            total_pagado += monto
-        elif estado == "Vencido":
-            total_vencido += monto
-        else:
-            total_pendiente += monto
+        elif fecha and fecha > hoy:
+            proximos.append(c)
+
+        elif fecha and fecha < hoy:
+            vencidos.append(c)
 
     html = f"""
     <style>
         body {{
             font-family: Arial;
+            margin:0;
             background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
             url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Flag_of_Canada.svg/1280px-Flag_of_Canada.svg.png');
             background-size: cover;
-            margin:0;
         }}
 
         header {{
@@ -164,9 +122,9 @@ def home():
 
         .container {{ padding:20px; }}
 
-        .dashboard {{
+        .grid {{
             display:grid;
-            grid-template-columns: repeat(4,1fr);
+            grid-template-columns: repeat(3,1fr);
             gap:10px;
         }}
 
@@ -191,36 +149,24 @@ def home():
             border:none;
             border-radius:5px;
         }}
-
-        a {{ margin-left:10px; text-decoration:none; }}
     </style>
 
     <header>
         <div>🏢 Office Thinking CRM</div>
         <div>
             Usuario: {session.get("user")} |
-            <a href="/logout" style="color:white;">🚪 Cerrar sesión</a>
+            <a href="/logout" style="color:white;">🚪 Salir</a>
         </div>
     </header>
 
     <div class="container">
 
-    <h3>📊 Dashboard</h3>
+    <h3>📅 Calendario inteligente</h3>
 
-    <div class="dashboard">
-        <div class="box">📁 Total<br><b>{total}</b></div>
-        <div class="box">🔥 Hoy<br><b>{hoy_count}</b></div>
-        <div class="box">⚠️ Atrasados<br><b>{atrasados}</b></div>
-        <div class="box">📅 Futuros<br><b>{futuros}</b></div>
-    </div>
-
-    <h3>💰 Finanzas</h3>
-
-    <div class="dashboard">
-        <div class="box">💵 Pagado<br><b>${total_pagado}</b></div>
-        <div class="box">🟡 Pendiente<br><b>${total_pendiente}</b></div>
-        <div class="box">🔴 Vencido<br><b>${total_vencido}</b></div>
-        <div class="box">📊 Neto<br><b>${total_pagado - total_vencido}</b></div>
+    <div class="grid">
+        <div class="box">🔥 Hoy<br><b>{len(hoy_tareas)}</b></div>
+        <div class="box">📅 Próximos<br><b>{len(proximos)}</b></div>
+        <div class="box">⚠️ Vencidos<br><b>{len(vencidos)}</b></div>
     </div>
 
     <h3>➕ Nuevo cliente</h3>
@@ -249,27 +195,16 @@ def home():
         <button>Guardar</button>
     </form>
 
-    <h3>📋 Clientes</h3>
+    <h3>📋 Agenda de hoy</h3>
     """
 
-    for i, c in enumerate(data):
-
-        estado = c.get("estado_pago","Pendiente")
-
-        color = "🟢"
-        if estado == "Vencido":
-            color = "🔴"
-        elif estado == "Pendiente":
-            color = "🟡"
-
+    for c in hoy_tareas:
         html += f"""
         <div class="card">
-            <b>{c['codigo']}</b> - {c['nombre']} {color}<br>
-            💰 {c.get('monto')} | 📅 {c.get('fecha')}<br>
-            📱 {c.get('celular')} | 📧 {c.get('email')}<br>
-
-            <a href="/edit/{i}">✏️ Editar</a>
-            <a href="/delete/{i}">🗑️ Eliminar</a>
+            🟢 <b>{c['nombre']}</b><br>
+            📅 Hoy<br>
+            💰 {c.get('monto')}<br>
+            📱 {c.get('celular')}<br>
         </div>
         """
 
@@ -281,15 +216,6 @@ def home():
 def logout():
     session.clear()
     return redirect("/login")
-
-# 🗑️ DELETE
-@app.route("/delete/<int:index>")
-def delete(index):
-    if session.get("logged"):
-        data = load_data()
-        data.pop(index)
-        save_data(data)
-    return redirect("/")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)

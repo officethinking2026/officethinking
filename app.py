@@ -1,14 +1,14 @@
 from flask import Flask, request, redirect, url_for, session, send_file
 import json, os
 from datetime import datetime
-import pandas as pd
+import csv
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-# 👥 Usuarios
+# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
@@ -36,6 +36,8 @@ def login():
             session["logged"] = True
             session["user"] = user
             return redirect(url_for("home"))
+
+        return "<h3>❌ Login incorrecto</h3>"
 
     return """
     <style>
@@ -80,15 +82,29 @@ def login():
     </div>
     """
 
-# 📊 EXPORTAR EXCEL
+# 📄 EXPORT CSV (SEGURO PARA RENDER)
 @app.route("/export")
 def export():
     data = load_data()
-    if not data:
-        return "No hay datos para exportar"
-    df = pd.DataFrame(data)
-    file = "clientes.xlsx"
-    df.to_excel(file, index=False)
+
+    file = "clientes.csv"
+
+    with open(file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # encabezados
+        writer.writerow(["Nombre","Servicio","Fecha","Accion","Notas","Usuario"])
+
+        for c in data:
+            writer.writerow([
+                c.get("nombre",""),
+                c.get("servicio",""),
+                c.get("fecha",""),
+                c.get("accion",""),
+                c.get("notas",""),
+                c.get("user","")
+            ])
+
     return send_file(file, as_attachment=True)
 
 # 🏠 HOME
@@ -163,7 +179,7 @@ def home():
     <header>
         <h2>🏢 Office Thinking</h2>
         Usuario: {session.get("user")}
-        <a href="/export">📊 Exportar Excel</a>
+        <a href="/export">📄 Exportar CSV</a>
         <a href="/logout">Cerrar sesión</a>
     </header>
 

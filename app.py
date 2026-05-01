@@ -1,13 +1,12 @@
 from flask import Flask, request, redirect, url_for, session
-import json
-import os
+import json, os
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-# 👥 Usuarios
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
@@ -23,10 +22,9 @@ def save_data(data):
     with open(FILE, "w") as f:
         json.dump(data, f)
 
-# 🔐 LOGIN
-@app.route("/login", methods=["GET", "POST"])
+# LOGIN
+@app.route("/login", methods=["GET","POST"])
 def login():
-
     if request.method == "POST":
         user = request.form.get("user")
         password = request.form.get("password")
@@ -36,32 +34,21 @@ def login():
             session["user"] = user
             return redirect(url_for("home"))
 
-        return "<h3>❌ Login incorrecto</h3>"
-
     return """
-    <style>
-        body { font-family: Arial; background:#eef1f5; text-align:center; padding-top:100px; }
-        .box { background:white; padding:25px; width:300px; margin:auto; border-radius:10px; }
-        input { width:90%; padding:10px; margin:5px 0; }
-        button { padding:10px; background:#2c3e50; color:white; border:none; border-radius:5px; }
-    </style>
-
-    <div class="box">
-        <h2>🏢 Office Thinking</h2>
-        <form method="POST">
-            <input name="user" placeholder="Usuario"><br>
-            <input type="password" name="password" placeholder="Contraseña"><br>
-            <button>Entrar</button>
-        </form>
-    </div>
+    <h2>Login</h2>
+    <form method="POST">
+        <input name="user">
+        <input type="password" name="password">
+        <button>Entrar</button>
+    </form>
     """
 
-# 🏠 HOME
-@app.route("/", methods=["GET", "POST"])
+# HOME
+@app.route("/", methods=["GET","POST"])
 def home():
 
     if not session.get("logged"):
-        return redirect(url_for("login"))
+        return redirect("/login")
 
     data = load_data()
 
@@ -69,151 +56,59 @@ def home():
         data.append({
             "nombre": request.form.get("nombre"),
             "servicio": request.form.get("servicio"),
-            "telefono": request.form.get("telefono"),
-            "email": request.form.get("email"),
-            "estado": request.form.get("estado"),
+            "fecha": request.form.get("fecha"),
+            "accion": request.form.get("accion"),
             "notas": request.form.get("notas"),
-            "creado_por": session.get("user")
+            "user": session.get("user")
         })
         save_data(data)
 
-    search = request.args.get("search")
-
     html = f"""
-    <style>
-        body {{ font-family: Arial; background:#eef1f5; margin:0; }}
-        header {{ background:#2c3e50; color:white; padding:15px; }}
-        .container {{ padding:20px; }}
-        .card {{ background:white; padding:15px; margin:10px 0; border-radius:10px; }}
-        input, select, textarea {{ padding:8px; margin:5px; }}
-        button {{ padding:8px 12px; }}
-        a {{ text-decoration:none; padding:5px 8px; border-radius:5px; margin-left:5px; }}
-        .del {{ background:#e74c3c; color:white; }}
-        .edit {{ background:#f39c12; color:white; }}
-        .logout {{ float:right; color:white; }}
-    </style>
+    <h2>Office Thinking</h2>
+    Usuario: {session.get("user")} <br><br>
 
-    <header>
-        <h2>🏢 Office Thinking</h2>
-        Usuario: {session.get("user")}
-        <a class="logout" href="/logout">Cerrar sesión</a>
-    </header>
-
-    <div class="container">
-
-    <h3>➕ Nuevo cliente</h3>
+    <h3>Nuevo seguimiento</h3>
     <form method="POST">
-        <input name="nombre" placeholder="Nombre">
-        <input name="servicio" placeholder="Servicio"><br>
-        <input name="telefono" placeholder="Teléfono">
-        <input name="email" placeholder="Email"><br>
+        Nombre: <input name="nombre"><br>
+        Servicio: <input name="servicio"><br>
+        Fecha: <input type="date" name="fecha"><br>
 
-        <select name="estado">
-            <option value="Activo">🟢 Activo</option>
-            <option value="Pendiente">🟡 Pendiente</option>
-            <option value="Finalizado">🔴 Finalizado</option>
+        Acción:
+        <select name="accion">
+            <option>Llamar</option>
+            <option>Enviar correo</option>
         </select><br>
 
-        <textarea name="notas" placeholder="Notas"></textarea><br>
+        Notas:<br>
+        <textarea name="notas"></textarea><br>
 
         <button>Guardar</button>
     </form>
 
-    <h3>🔍 Buscar</h3>
-    <form method="GET">
-        <input name="search" placeholder="Buscar cliente">
-        <button>Buscar</button>
-    </form>
-
-    <hr>
-    <h3>📋 Clientes</h3>
+    <h3>📅 Pendientes</h3>
     """
+
+    hoy = datetime.now().strftime("%Y-%m-%d")
 
     for i, c in enumerate(data):
 
-        if search and search.lower() not in c["nombre"].lower():
-            continue
+        estado = "⏳"
+        if c.get("fecha") == hoy:
+            estado = "🔥 HOY"
+        elif c.get("fecha") < hoy:
+            estado = "⚠️ ATRASADO"
 
         html += f"""
-        <div class="card">
-            <b>{c['nombre']}</b><br>
-            Servicio: {c['servicio']}<br>
-            Teléfono: {c.get('telefono','')}<br>
-            Email: {c.get('email','')}<br>
-            Estado: {c.get('estado','')}<br>
-            Notas: {c.get('notas','')}<br>
-            Creado por: {c.get('creado_por','')}<br><br>
-
-            <a class="del" href="/delete/{i}">Eliminar</a>
-            <a class="edit" href="/edit/{i}">Editar</a>
+        <div style="border:1px solid #ccc; margin:10px; padding:10px;">
+            <b>{c['nombre']}</b> - {c['servicio']}<br>
+            📅 {c.get('fecha')} | {estado}<br>
+            📞 {c.get('accion')}<br>
+            📝 {c.get('notas')}<br>
+            👤 {c.get('user')}<br>
         </div>
         """
 
-    html += "</div>"
     return html
-
-# DELETE
-@app.route("/delete/<int:index>")
-def delete(index):
-    if session.get("logged"):
-        data = load_data()
-        if 0 <= index < len(data):
-            data.pop(index)
-            save_data(data)
-    return redirect(url_for("home"))
-
-# EDIT
-@app.route("/edit/<int:index>", methods=["GET", "POST"])
-def edit(index):
-
-    if not session.get("logged"):
-        return redirect(url_for("login"))
-
-    data = load_data()
-
-    if request.method == "POST":
-        data[index] = {
-            "nombre": request.form.get("nombre"),
-            "servicio": request.form.get("servicio"),
-            "telefono": request.form.get("telefono"),
-            "email": request.form.get("email"),
-            "estado": request.form.get("estado"),
-            "notas": request.form.get("notas"),
-            "creado_por": session.get("user")
-        }
-        save_data(data)
-        return redirect(url_for("home"))
-
-    c = data[index]
-
-    return f"""
-    <h2>Editar cliente</h2>
-    <form method="POST">
-        Nombre: <input name="nombre" value="{c['nombre']}"><br><br>
-        Servicio: <input name="servicio" value="{c['servicio']}"><br><br>
-        Teléfono: <input name="telefono" value="{c.get('telefono','')}"><br><br>
-        Email: <input name="email" value="{c.get('email','')}"><br><br>
-
-        Estado:
-        <select name="estado">
-            <option>{c.get('estado','')}</option>
-            <option>Activo</option>
-            <option>Pendiente</option>
-            <option>Finalizado</option>
-        </select><br><br>
-
-        Notas:<br>
-        <textarea name="notas">{c.get('notas','')}</textarea><br><br>
-
-        <button>Guardar</button>
-    </form>
-    """
-
-# LOGOUT
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)

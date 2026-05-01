@@ -12,6 +12,7 @@ USERS = {
     "alfredo": "alfredo1"
 }
 
+# 📦 DATA
 def load_data():
     if os.path.exists(FILE):
         with open(FILE, "r") as f:
@@ -38,10 +39,16 @@ def login():
             return redirect(url_for("home"))
 
     return """
-    <h2>Office Thinking</h2>
+    <style>
+        body {font-family:Arial;text-align:center;padding-top:100px;}
+        input,button{padding:10px;margin:5px;}
+    </style>
+
+    <h2>🏢 Office Thinking CRM</h2>
+
     <form method="POST">
-        <input name="user" placeholder="Usuario">
-        <input type="password" name="password" placeholder="Contraseña">
+        <input name="user" placeholder="Usuario"><br>
+        <input type="password" name="password" placeholder="Contraseña"><br>
         <button>Entrar</button>
     </form>
     """
@@ -55,6 +62,7 @@ def home():
 
     data = load_data()
 
+    # ➕ CREAR CLIENTE
     if request.method == "POST":
         data.append({
             "codigo": generate_code(data),
@@ -66,7 +74,7 @@ def home():
             "accion": request.form.get("accion"),
             "notas": request.form.get("notas"),
 
-            # 💰 NUEVOS CAMPOS
+            # 💰 pagos
             "monto": request.form.get("monto"),
             "estado_pago": request.form.get("estado_pago"),
 
@@ -76,7 +84,34 @@ def home():
 
     hoy = datetime.now().strftime("%Y-%m-%d")
 
+    # 📊 MÉTRICAS GENERALES
+    total = len(data)
+    hoy_count = 0
+    atrasados = 0
+    futuros = 0
+
+    total_pagado = 0
     total_pendiente = 0
+    total_vencido = 0
+
+    for c in data:
+        f = c.get("fecha")
+        estado = c.get("estado_pago","Pendiente")
+        monto = float(c.get("monto") or 0)
+
+        if f == hoy:
+            hoy_count += 1
+        elif f and f < hoy:
+            atrasados += 1
+        else:
+            futuros += 1
+
+        if estado == "Pagado":
+            total_pagado += monto
+        elif estado == "Vencido":
+            total_vencido += monto
+        else:
+            total_pendiente += monto
 
     html = f"""
     <style>
@@ -98,6 +133,20 @@ def home():
             padding:20px;
         }}
 
+        .dashboard {{
+            display:grid;
+            grid-template-columns: repeat(4,1fr);
+            gap:10px;
+            margin-bottom:10px;
+        }}
+
+        .box {{
+            background:white;
+            padding:10px;
+            border-radius:10px;
+            text-align:center;
+        }}
+
         .card {{
             background:white;
             padding:15px;
@@ -109,7 +158,7 @@ def home():
         .pendiente {{ border-left:5px solid orange; }}
         .vencido {{ border-left:5px solid red; }}
 
-        input, select, textarea {{
+        input,select,textarea {{
             padding:8px;
             margin:5px;
         }}
@@ -126,11 +175,31 @@ def home():
     <header>
         <h2>🏢 Office Thinking CRM</h2>
         Usuario: {session.get("user")}
+        <a href="/logout">Salir</a>
     </header>
 
     <div class="container">
 
+    <h3>📊 Dashboard general</h3>
+
+    <div class="dashboard">
+        <div class="box">📁 Total<br><b>{total}</b></div>
+        <div class="box">🔥 Hoy<br><b>{hoy_count}</b></div>
+        <div class="box">⚠️ Atrasados<br><b>{atrasados}</b></div>
+        <div class="box">📅 Futuros<br><b>{futuros}</b></div>
+    </div>
+
+    <h3>💰 Dashboard financiero</h3>
+
+    <div class="dashboard">
+        <div class="box">💵 Pagado<br><b>${total_pagado}</b></div>
+        <div class="box">🟡 Pendiente<br><b>${total_pendiente}</b></div>
+        <div class="box">🔴 Vencido<br><b>${total_vencido}</b></div>
+        <div class="box">📊 Flujo<br><b>${total_pagado - total_vencido}</b></div>
+    </div>
+
     <h3>➕ Nuevo cliente</h3>
+
     <form method="POST">
         <input name="nombre" placeholder="Nombre"><br>
         <input name="servicio" placeholder="Servicio"><br>
@@ -138,7 +207,7 @@ def home():
         <input name="email" placeholder="Email"><br>
         <input type="date" name="fecha"><br>
 
-        <input name="monto" placeholder="Monto a pagar ($)"><br>
+        <input name="monto" placeholder="Monto ($)"><br>
 
         <select name="estado_pago">
             <option>Pendiente</option>
@@ -156,7 +225,7 @@ def home():
         <button>Guardar</button>
     </form>
 
-    <h3>📋 Clientes y pagos</h3>
+    <h3>📋 Clientes</h3>
     """
 
     for i, c in enumerate(data):
@@ -165,27 +234,23 @@ def home():
 
         if estado == "Pagado":
             clase = "pagado"
+            etiqueta = "🟢 PAGADO"
         elif estado == "Vencido":
             clase = "vencido"
+            etiqueta = "🔴 VENCIDO"
         else:
             clase = "pendiente"
-
-        if estado != "Pagado":
-            try:
-                total_pendiente += float(c.get("monto") or 0)
-            except:
-                pass
+            etiqueta = "🟡 PENDIENTE"
 
         html += f"""
         <div class="card {clase}">
             <b>{c.get('codigo')}</b> - {c['nombre']}<br>
-            💰 Monto: {c.get('monto','0')}<br>
-            📊 Estado pago: {estado}<br>
+            {etiqueta}<br>
+            💰 {c.get('monto')}<br>
             📅 {c.get('fecha')}<br>
-            📞 {c.get('accion')}<br>
-            📱 {c.get('celular','')}<br>
-            📧 {c.get('email','')}<br>
-            📝 {c.get('notas','')}<br>
+            📱 {c.get('celular')}<br>
+            📧 {c.get('email')}<br>
+            📝 {c.get('notas')}<br>
             👤 {c.get('user')}<br><br>
 
             <a href="/edit/{i}">✏️ Editar</a>
@@ -193,12 +258,7 @@ def home():
         </div>
         """
 
-    html += f"""
-    <hr>
-    <h3>💰 Total pendiente de cobro: ${total_pendiente}</h3>
-    </div>
-    """
-
+    html += "</div>"
     return html
 
 # ✏️ EDITAR
@@ -211,49 +271,31 @@ def edit(index):
     data = load_data()
 
     if request.method == "POST":
-        data[index]["nombre"] = request.form.get("nombre")
-        data[index]["servicio"] = request.form.get("servicio")
-        data[index]["celular"] = request.form.get("celular")
-        data[index]["email"] = request.form.get("email")
-        data[index]["fecha"] = request.form.get("fecha")
-        data[index]["accion"] = request.form.get("accion")
-        data[index]["notas"] = request.form.get("notas")
-        data[index]["monto"] = request.form.get("monto")
-        data[index]["estado_pago"] = request.form.get("estado_pago")
+        for k in ["nombre","servicio","celular","email","fecha","accion","notas","monto","estado_pago"]:
+            data[index][k] = request.form.get(k)
 
         save_data(data)
-        return redirect(url_for("home"))
+        return redirect("/")
 
     c = data[index]
 
     return f"""
     <h2>Editar cliente</h2>
+
     <form method="POST">
-        Nombre: <input name="nombre" value="{c['nombre']}"><br>
-        Servicio: <input name="servicio" value="{c['servicio']}"><br>
-        Celular: <input name="celular" value="{c.get('celular','')}"><br>
-        Email: <input name="email" value="{c.get('email','')}"><br>
-        Fecha: <input type="date" name="fecha" value="{c.get('fecha','')}"><br>
+        <input name="nombre" value="{c['nombre']}"><br>
+        <input name="servicio" value="{c['servicio']}"><br>
+        <input name="celular" value="{c.get('celular','')}"><br>
+        <input name="email" value="{c.get('email','')}"><br>
+        <input name="fecha" value="{c.get('fecha','')}"><br>
+        <input name="monto" value="{c.get('monto','')}"><br>
 
-        Monto: <input name="monto" value="{c.get('monto','')}"><br>
-
-        Estado pago:
         <select name="estado_pago">
             <option>{c.get('estado_pago','Pendiente')}</option>
             <option>Pagado</option>
             <option>Pendiente</option>
             <option>Vencido</option>
         </select><br>
-
-        Acción:
-        <select name="accion">
-            <option>{c.get('accion','')}</option>
-            <option>Llamar</option>
-            <option>Enviar correo</option>
-        </select><br>
-
-        Notas:<br>
-        <textarea name="notas">{c.get('notas','')}</textarea><br>
 
         <button>Guardar</button>
     </form>

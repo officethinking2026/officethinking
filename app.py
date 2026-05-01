@@ -1,6 +1,6 @@
 from flask import Flask, request, redirect, url_for, session
 import json, os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
@@ -83,6 +83,7 @@ def home():
         save_data(data)
 
     hoy = datetime.now().strftime("%Y-%m-%d")
+    manana = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
 
     # 📊 DASHBOARD GENERAL
     total = len(data)
@@ -95,10 +96,10 @@ def home():
     total_pendiente = 0
     total_vencido = 0
 
-    # 🧠 INTELIGENCIA
-    urgentes = 0
-    proximos = 0
-    normales = 0
+    # 🧠 AUTOMATIZACIÓN
+    alertas_hoy = []
+    alertas_vencidas = []
+    alertas_proximas = []
 
     for c in data:
 
@@ -122,13 +123,25 @@ def home():
         else:
             total_pendiente += monto
 
-        # inteligencia
+        # automatización
         if estado == "Vencido":
-            urgentes += 1
-        elif fecha and fecha <= hoy:
-            proximos += 1
-        else:
-            normales += 1
+            alertas_vencidas.append(c)
+
+        elif fecha == hoy:
+            alertas_hoy.append(c)
+
+        elif fecha == manana:
+            alertas_proximas.append(c)
+
+    # 🧠 MENSAJE INTELIGENTE
+    if len(alertas_vencidas) > 0:
+        mensaje = "🔴 Tienes cobros vencidos que requieren atención inmediata"
+    elif len(alertas_hoy) > 0:
+        mensaje = "📅 Tienes tareas para hoy"
+    elif len(alertas_proximas) > 0:
+        mensaje = "🟡 Tienes clientes próximos a vencer"
+    else:
+        mensaje = "🟢 Todo está en orden"
 
     html = f"""
     <style>
@@ -206,6 +219,17 @@ def home():
 
     <div class="container">
 
+    <h3>🧠 Automatización del día</h3>
+
+    <div class="dashboard">
+        <div class="box">🔴 Vencidos<br><b>{len(alertas_vencidas)}</b></div>
+        <div class="box">📅 Hoy<br><b>{len(alertas_hoy)}</b></div>
+        <div class="box">🟡 Mañana<br><b>{len(alertas_proximas)}</b></div>
+        <div class="box">⚡ Sistema<br><b>Activo</b></div>
+    </div>
+
+    <p><b>{mensaje}</b></p>
+
     <h3>📊 Dashboard general</h3>
 
     <div class="dashboard">
@@ -215,22 +239,13 @@ def home():
         <div class="box">📅 Futuros<br><b>{futuros}</b></div>
     </div>
 
-    <h3>💰 Dashboard financiero</h3>
+    <h3>💰 Finanzas</h3>
 
     <div class="dashboard">
         <div class="box">💵 Pagado<br><b>${total_pagado}</b></div>
         <div class="box">🟡 Pendiente<br><b>${total_pendiente}</b></div>
         <div class="box">🔴 Vencido<br><b>${total_vencido}</b></div>
         <div class="box">📊 Neto<br><b>${total_pagado - total_vencido}</b></div>
-    </div>
-
-    <h3>🧠 Panel inteligente</h3>
-
-    <div class="dashboard">
-        <div class="box">🔴 Urgentes<br><b>{urgentes}</b></div>
-        <div class="box">🟡 Acción pronto<br><b>{proximos}</b></div>
-        <div class="box">🟢 Normales<br><b>{normales}</b></div>
-        <div class="box">⚡ Sistema activo</div>
     </div>
 
     <h3>➕ Nuevo cliente</h3>
@@ -271,9 +286,9 @@ def home():
         if estado == "Vencido":
             clase = "urgente"
             etiqueta = "🔴 URGENTE"
-        elif fecha and fecha <= hoy:
+        elif fecha == hoy:
             clase = "proximo"
-            etiqueta = "🟡 ACCIÓN"
+            etiqueta = "🟡 HOY"
         else:
             clase = "normal"
             etiqueta = "🟢 OK"
@@ -286,8 +301,7 @@ def home():
             📅 {fecha}<br>
             📱 {c.get('celular')}<br>
             📧 {c.get('email')}<br>
-            📝 {c.get('notas')}<br>
-            👤 {c.get('user')}<br><br>
+            📝 {c.get('notas')}<br><br>
 
             <a href="/edit/{i}">✏️ Editar</a>
             <a href="/delete/{i}">🗑️ Eliminar</a>

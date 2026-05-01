@@ -8,6 +8,7 @@ app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
+# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
@@ -84,32 +85,7 @@ def login():
     </div>
     """
 
-# 📄 EXPORT CSV
-@app.route("/export")
-def export():
-    data = load_data()
-    file = "clientes.csv"
-
-    with open(file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Codigo","Nombre","Servicio","Celular","Email","Fecha","Accion","Notas","Usuario"])
-
-        for c in data:
-            writer.writerow([
-                c.get("codigo",""),
-                c.get("nombre",""),
-                c.get("servicio",""),
-                c.get("celular",""),
-                c.get("email",""),
-                c.get("fecha",""),
-                c.get("accion",""),
-                c.get("notas",""),
-                c.get("user","")
-            ])
-
-    return send_file(file, as_attachment=True)
-
-# 🏠 HOME
+# 🏠 HOME (CALENDARIO + CRM)
 @app.route("/", methods=["GET","POST"])
 def home():
 
@@ -118,12 +94,10 @@ def home():
 
     data = load_data()
 
+    # ➕ crear cliente
     if request.method == "POST":
-
-        code = generate_code(data)
-
         data.append({
-            "codigo": code,
+            "codigo": generate_code(data),
             "nombre": request.form.get("nombre"),
             "servicio": request.form.get("servicio"),
             "celular": request.form.get("celular"),
@@ -133,10 +107,12 @@ def home():
             "notas": request.form.get("notas"),
             "user": session.get("user")
         })
-
         save_data(data)
 
     hoy = datetime.now().strftime("%Y-%m-%d")
+
+    # ordenar por fecha
+    data_sorted = sorted(data, key=lambda x: x.get("fecha",""))
 
     html = f"""
     <style>
@@ -164,7 +140,12 @@ def home():
             padding:15px;
             margin:10px 0;
             border-radius:10px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.1);
         }}
+
+        .hoy {{ border-left:5px solid green; }}
+        .atrasado {{ border-left:5px solid red; }}
+        .futuro {{ border-left:5px solid orange; }}
 
         input, select, textarea {{
             padding:8px;
@@ -178,12 +159,17 @@ def home():
             border:none;
             border-radius:5px;
         }}
+
+        a {{
+            margin-left:10px;
+            text-decoration:none;
+            color:white;
+        }}
     </style>
 
     <header>
         <h2>🏢 Office Thinking</h2>
         Usuario: {session.get("user")}
-        <a href="/export">📄 Exportar CSV</a>
         <a href="/logout">Cerrar sesión</a>
     </header>
 
@@ -207,33 +193,101 @@ def home():
         <button>Guardar</button>
     </form>
 
-    <h3>📋 Clientes</h3>
+    <h3>📅 Calendario de clientes</h3>
     """
 
-    for c in data:
+    for i, c in enumerate(data_sorted):
 
-        estado = "⏳"
-        if c.get("fecha") == hoy:
-            estado = "🔥 HOY"
-        elif c.get("fecha") and c.get("fecha") < hoy:
-            estado = "⚠️ ATRASADO"
+        fecha = c.get("fecha")
+
+        clase = "futuro"
+        etiqueta = "📅 FUTURO"
+
+        if fecha == hoy:
+            clase = "hoy"
+            etiqueta = "🔥 HOY"
+        elif fecha and fecha < hoy:
+            clase = "atrasado"
+            etiqueta = "⚠️ ATRASADO"
 
         html += f"""
-        <div class="card">
+        <div class="card {clase}">
             <b>{c.get('codigo')}</b> - {c['nombre']}<br>
-            Servicio: {c['servicio']}<br>
+            {etiqueta}<br>
+            📅 {fecha}<br>
+            📞 {c.get('accion')}<br>
             📱 {c.get('celular','')}<br>
             📧 {c.get('email','')}<br>
-            📅 {c.get('fecha')} {estado}<br>
-            📞 {c.get('accion')}<br>
-            📝 {c.get('notas')}<br>
-            👤 {c.get('user')}
+            📝 {c.get('notas','')}<br>
+            👤 {c.get('user')}<br><br>
+
+            <a href="/edit/{i}">✏️ Editar</a>
+            <a href="/delete/{i}">🗑️ Eliminar</a>
         </div>
         """
 
     html += "</div>"
     return html
 
+# ✏️ EDITAR
+@app.route("/edit/<int:index>", methods=["GET","POST"])
+def edit(index):
+
+    if not session.get("logged"):
+        return redirect("/login")
+
+    data = load_data()
+
+    if request.method == "POST":
+        data[index]["nombre"] = request.form.get("nombre")
+        data[index]["servicio"] = request.form.get("servicio")
+        data[index]["celular"] = request.form.get("celular")
+        data[index]["email"] = request.form.get("email")
+        data[index]["fecha"] = request.form.get("fecha")
+        data[index]["accion"] = request.form.get("accion")
+        data[index]["notas"] = request.form.get("notas")
+
+        save_data(data)
+        return redirect(url_for("home"))
+
+    c = data[index]
+
+    return f"""
+    <h2>Editar cliente</h2>
+    <form method="POST">
+        Nombre: <input name="nombre" value="{c['nombre']}"><br>
+        Servicio: <input name="servicio" value="{c['servicio']}"><br>
+        Celular: <input name="celular" value="{c.get('celular','')}"><br>
+        Email: <input name="email" value="{c.get('email','')}"><br>
+        Fecha: <input type="date" name="fecha" value="{c.get('fecha','')}"><br>
+
+        Acción:
+        <select name="accion">
+            <option>{c.get('accion','')}</option>
+            <option>Llamar</option>
+            <option>Enviar correo</option>
+        </select><br>
+
+        Notas:<br>
+        <textarea name="notas">{c.get('notas','')}</textarea><br>
+
+        <button>Guardar</button>
+    </form>
+    """
+
+# 🗑️ ELIMINAR
+@app.route("/delete/<int:index>")
+def delete(index):
+
+    if session.get("logged"):
+        data = load_data()
+        if 0 <= index < len(data):
+            data.pop(index)
+            save_data(data)
+
+    return redirect(url_for("home"))
+
+# 🚪 LOGOUT
 @app.route("/logout")
 def logout():
     session.clear()

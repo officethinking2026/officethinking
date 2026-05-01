@@ -7,8 +7,11 @@ app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-USER = "admin"
-PASS = "1234"
+# 👥 Usuarios
+USERS = {
+    "paula": "paula1",
+    "alfredo": "alfredo1"
+}
 
 def load_data():
     if os.path.exists(FILE):
@@ -20,7 +23,7 @@ def save_data(data):
     with open(FILE, "w") as f:
         json.dump(data, f)
 
-# LOGIN
+# 🔐 LOGIN
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
@@ -28,8 +31,9 @@ def login():
         user = request.form.get("user")
         password = request.form.get("password")
 
-        if user == USER and password == PASS:
+        if user in USERS and USERS[user] == password:
             session["logged"] = True
+            session["user"] = user
             return redirect(url_for("home"))
 
         return "<h3>❌ Login incorrecto</h3>"
@@ -52,7 +56,7 @@ def login():
     </div>
     """
 
-# HOME
+# 🏠 HOME
 @app.route("/", methods=["GET", "POST"])
 def home():
 
@@ -62,38 +66,36 @@ def home():
     data = load_data()
 
     if request.method == "POST":
-        nombre = request.form.get("nombre")
-        servicio = request.form.get("servicio")
-        telefono = request.form.get("telefono")
-        email = request.form.get("email")
-
-        if nombre and servicio:
-            data.append({
-                "nombre": nombre,
-                "servicio": servicio,
-                "telefono": telefono,
-                "email": email
-            })
-            save_data(data)
+        data.append({
+            "nombre": request.form.get("nombre"),
+            "servicio": request.form.get("servicio"),
+            "telefono": request.form.get("telefono"),
+            "email": request.form.get("email"),
+            "estado": request.form.get("estado"),
+            "notas": request.form.get("notas"),
+            "creado_por": session.get("user")
+        })
+        save_data(data)
 
     search = request.args.get("search")
 
-    html = """
+    html = f"""
     <style>
-        body { font-family: Arial; background:#eef1f5; margin:0; }
-        header { background:#2c3e50; color:white; padding:15px; }
-        .container { padding:20px; }
-        .card { background:white; padding:15px; margin:10px 0; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-        input { padding:8px; margin:5px; }
-        button { padding:8px 12px; }
-        a { text-decoration:none; padding:5px 8px; border-radius:5px; margin-left:5px; }
-        .del { background:#e74c3c; color:white; }
-        .edit { background:#f39c12; color:white; }
-        .logout { float:right; color:white; }
+        body {{ font-family: Arial; background:#eef1f5; margin:0; }}
+        header {{ background:#2c3e50; color:white; padding:15px; }}
+        .container {{ padding:20px; }}
+        .card {{ background:white; padding:15px; margin:10px 0; border-radius:10px; }}
+        input, select, textarea {{ padding:8px; margin:5px; }}
+        button {{ padding:8px 12px; }}
+        a {{ text-decoration:none; padding:5px 8px; border-radius:5px; margin-left:5px; }}
+        .del {{ background:#e74c3c; color:white; }}
+        .edit {{ background:#f39c12; color:white; }}
+        .logout {{ float:right; color:white; }}
     </style>
 
     <header>
         <h2>🏢 Office Thinking</h2>
+        Usuario: {session.get("user")}
         <a class="logout" href="/logout">Cerrar sesión</a>
     </header>
 
@@ -102,9 +104,18 @@ def home():
     <h3>➕ Nuevo cliente</h3>
     <form method="POST">
         <input name="nombre" placeholder="Nombre">
-        <input name="servicio" placeholder="Servicio">
+        <input name="servicio" placeholder="Servicio"><br>
         <input name="telefono" placeholder="Teléfono">
-        <input name="email" placeholder="Email">
+        <input name="email" placeholder="Email"><br>
+
+        <select name="estado">
+            <option value="Activo">🟢 Activo</option>
+            <option value="Pendiente">🟡 Pendiente</option>
+            <option value="Finalizado">🔴 Finalizado</option>
+        </select><br>
+
+        <textarea name="notas" placeholder="Notas"></textarea><br>
+
         <button>Guardar</button>
     </form>
 
@@ -128,7 +139,10 @@ def home():
             <b>{c['nombre']}</b><br>
             Servicio: {c['servicio']}<br>
             Teléfono: {c.get('telefono','')}<br>
-            Email: {c.get('email','')}<br><br>
+            Email: {c.get('email','')}<br>
+            Estado: {c.get('estado','')}<br>
+            Notas: {c.get('notas','')}<br>
+            Creado por: {c.get('creado_por','')}<br><br>
 
             <a class="del" href="/delete/{i}">Eliminar</a>
             <a class="edit" href="/edit/{i}">Editar</a>
@@ -162,7 +176,10 @@ def edit(index):
             "nombre": request.form.get("nombre"),
             "servicio": request.form.get("servicio"),
             "telefono": request.form.get("telefono"),
-            "email": request.form.get("email")
+            "email": request.form.get("email"),
+            "estado": request.form.get("estado"),
+            "notas": request.form.get("notas"),
+            "creado_por": session.get("user")
         }
         save_data(data)
         return redirect(url_for("home"))
@@ -176,6 +193,18 @@ def edit(index):
         Servicio: <input name="servicio" value="{c['servicio']}"><br><br>
         Teléfono: <input name="telefono" value="{c.get('telefono','')}"><br><br>
         Email: <input name="email" value="{c.get('email','')}"><br><br>
+
+        Estado:
+        <select name="estado">
+            <option>{c.get('estado','')}</option>
+            <option>Activo</option>
+            <option>Pendiente</option>
+            <option>Finalizado</option>
+        </select><br><br>
+
+        Notas:<br>
+        <textarea name="notas">{c.get('notas','')}</textarea><br><br>
+
         <button>Guardar</button>
     </form>
     """

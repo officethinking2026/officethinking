@@ -7,6 +7,7 @@ app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
+# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
@@ -36,7 +37,7 @@ def login():
         if user in USERS and USERS[user] == password:
             session["logged"] = True
             session["user"] = user
-            return redirect(url_for("home"))
+            return redirect("/")
 
     return """
     <style>
@@ -61,55 +62,51 @@ def home():
 
     data = load_data()
 
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    hoy = datetime.now().date()
+    prox_7 = hoy + timedelta(days=7)
+    ant_7 = hoy - timedelta(days=7)
 
-    # ➕ CLIENTE
+    # ➕ CREAR CLIENTE
     if request.method == "POST":
-        cliente = {
+        data.append({
             "codigo": generate_code(data),
             "nombre": request.form.get("nombre"),
             "servicio": request.form.get("servicio"),
             "celular": request.form.get("celular"),
             "email": request.form.get("email"),
             "fecha": request.form.get("fecha"),
-            "accion": request.form.get("accion"),
-            "notas": request.form.get("notas"),
             "monto": request.form.get("monto"),
             "estado_pago": request.form.get("estado_pago"),
-            "user": session.get("user")
-        }
-
-        data.append(cliente)
+            "notas": request.form.get("notas")
+        })
         save_data(data)
 
-    # 📅 CALENDARIO
-    hoy_tareas = []
-    proximos = []
-    vencidos = []
-
-    total = len(data)
+    # 📊 CONTADORES
+    hoy_list = []
+    futuro_list = []
+    pasado_list = []
 
     for c in data:
 
-        fecha = c.get("fecha")
+        try:
+            fecha = datetime.strptime(c.get("fecha",""), "%Y-%m-%d").date()
+        except:
+            continue
 
         if fecha == hoy:
-            hoy_tareas.append(c)
+            hoy_list.append(c)
+        elif hoy < fecha <= prox_7:
+            futuro_list.append(c)
+        elif ant_7 <= fecha < hoy:
+            pasado_list.append(c)
 
-        elif fecha and fecha > hoy:
-            proximos.append(c)
-
-        elif fecha and fecha < hoy:
-            vencidos.append(c)
-
+    # 🎨 UI
     html = f"""
     <style>
         body {{
             font-family: Arial;
             margin:0;
-            background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
-            url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Flag_of_Canada.svg/1280px-Flag_of_Canada.svg.png');
-            background-size: cover;
+            background:#f5f5f5;
         }}
 
         header {{
@@ -120,12 +117,11 @@ def home():
             justify-content:space-between;
         }}
 
-        .container {{ padding:20px; }}
-
         .grid {{
             display:grid;
-            grid-template-columns: repeat(3,1fr);
+            grid-template-columns:repeat(3,1fr);
             gap:10px;
+            padding:10px;
         }}
 
         .box {{
@@ -137,9 +133,15 @@ def home():
 
         .card {{
             background:white;
-            padding:15px;
-            margin:10px 0;
+            margin:10px;
+            padding:10px;
             border-radius:10px;
+        }}
+
+        input,select,textarea {{
+            padding:6px;
+            margin:3px;
+            width:90%;
         }}
 
         button {{
@@ -149,6 +151,8 @@ def home():
             border:none;
             border-radius:5px;
         }}
+
+        a {{ margin-left:10px; }}
     </style>
 
     <header>
@@ -159,57 +163,117 @@ def home():
         </div>
     </header>
 
-    <div class="container">
-
-    <h3>📅 Calendario inteligente</h3>
-
     <div class="grid">
-        <div class="box">🔥 Hoy<br><b>{len(hoy_tareas)}</b></div>
-        <div class="box">📅 Próximos<br><b>{len(proximos)}</b></div>
-        <div class="box">⚠️ Vencidos<br><b>{len(vencidos)}</b></div>
+        <div class="box">📅 Hoy<br><b>{len(hoy_list)}</b></div>
+        <div class="box">➡️ Próximos<br><b>{len(futuro_list)}</b></div>
+        <div class="box">⬅️ Pasados<br><b>{len(pasado_list)}</b></div>
     </div>
 
-    <h3>➕ Nuevo cliente</h3>
+    <div class="card">
+        <h3>➕ Nuevo cliente</h3>
 
-    <form method="POST">
-        <input name="nombre" placeholder="Nombre"><br>
-        <input name="servicio" placeholder="Servicio"><br>
-        <input name="celular" placeholder="Celular"><br>
-        <input name="email" placeholder="Email"><br>
-        <input type="date" name="fecha"><br>
-        <input name="monto" placeholder="Monto"><br>
+        <form method="POST">
+            <input name="nombre" placeholder="Nombre"><br>
+            <input name="servicio" placeholder="Servicio"><br>
+            <input name="celular" placeholder="Celular"><br>
+            <input name="email" placeholder="Email"><br>
+            <input type="date" name="fecha"><br>
+            <input name="monto" placeholder="Monto"><br>
 
-        <select name="estado_pago">
-            <option>Pendiente</option>
-            <option>Pagado</option>
-            <option>Vencido</option>
-        </select><br>
+            <select name="estado_pago">
+                <option>Pendiente</option>
+                <option>Pagado</option>
+                <option>Vencido</option>
+            </select><br>
 
-        <select name="accion">
-            <option>Llamar</option>
-            <option>Enviar correo</option>
-        </select><br>
+            <textarea name="notas" placeholder="Notas"></textarea><br>
 
-        <textarea name="notas"></textarea><br>
+            <button>Guardar</button>
+        </form>
+    </div>
 
-        <button>Guardar</button>
-    </form>
-
-    <h3>📋 Agenda de hoy</h3>
+    <h3 style="margin-left:10px;">📋 Clientes</h3>
     """
 
-    for c in hoy_tareas:
+    for i, c in enumerate(data):
+
         html += f"""
         <div class="card">
-            🟢 <b>{c['nombre']}</b><br>
-            📅 Hoy<br>
-            💰 {c.get('monto')}<br>
-            📱 {c.get('celular')}<br>
+            <b>{c.get('codigo')}</b> - {c.get('nombre')}<br>
+            📅 {c.get('fecha')} | 💰 {c.get('monto')}<br>
+            📱 {c.get('celular')} | 📧 {c.get('email')}<br>
+
+            <a href="/edit/{i}">✏️ Editar</a>
+            <a href="/delete/{i}">🗑️ Eliminar</a>
         </div>
         """
 
     html += "</div>"
     return html
+
+# ✏️ EDITAR (FIX DEFINITIVO)
+@app.route("/edit/<int:index>", methods=["GET","POST"])
+def edit(index):
+
+    if not session.get("logged"):
+        return redirect("/login")
+
+    data = load_data()
+
+    if index < 0 or index >= len(data):
+        return redirect("/")
+
+    c = data[index]
+
+    if request.method == "POST":
+
+        campos = ["nombre","servicio","celular","email","fecha","monto","estado_pago","notas"]
+
+        for k in campos:
+            c[k] = request.form.get(k,"")
+
+        data[index] = c
+        save_data(data)
+
+        return redirect("/")
+
+    return f"""
+    <h2>✏️ Editar cliente</h2>
+
+    <form method="POST">
+        <input name="nombre" value="{c.get('nombre','')}"><br>
+        <input name="servicio" value="{c.get('servicio','')}"><br>
+        <input name="celular" value="{c.get('celular','')}"><br>
+        <input name="email" value="{c.get('email','')}"><br>
+        <input name="fecha" value="{c.get('fecha','')}"><br>
+        <input name="monto" value="{c.get('monto','')}"><br>
+
+        <select name="estado_pago">
+            <option>{c.get('estado_pago','Pendiente')}</option>
+            <option>Pendiente</option>
+            <option>Pagado</option>
+            <option>Vencido</option>
+        </select><br>
+
+        <textarea name="notas">{c.get('notas','')}</textarea><br>
+
+        <button>Guardar cambios</button>
+    </form>
+    """
+
+# 🗑️ ELIMINAR
+@app.route("/delete/<int:index>")
+def delete(index):
+
+    if session.get("logged"):
+        data = load_data()
+
+        if 0 <= index < len(data):
+            data.pop(index)
+
+        save_data(data)
+
+    return redirect("/")
 
 # 🚪 LOGOUT
 @app.route("/logout")

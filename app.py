@@ -1,16 +1,23 @@
 from flask import Flask, request, redirect, url_for, session, Response
 import json, os, csv
 from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
+# 👥 USUARIOS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
 }
+
+# 📩 EMAIL (CONFIG SEGURO)
+EMAIL_SENDER = "TU_CORREO_GMAIL"
+EMAIL_PASSWORD = "TU_APP_PASSWORD"  # ⚠️ NO poner contraseña real aquí
 
 # 📦 DATA
 def load_data():
@@ -26,10 +33,24 @@ def save_data(data):
 def generate_code(data):
     return f"C{len(data)+1:04d}"
 
-# 📩 (BASE) NOTIFICACIÓN
-def enviar_notificacion(cliente):
-    # 👉 aquí luego conectamos email real
-    print(f"[NOTIFICACIÓN] Cliente {cliente['nombre']} requiere atención")
+# 📩 EMAIL REAL
+def enviar_email(destinatario, asunto, mensaje):
+    try:
+        msg = MIMEText(mensaje)
+        msg["Subject"] = asunto
+        msg["From"] = EMAIL_SENDER
+        msg["To"] = destinatario
+
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_SENDER, destinatario, msg.as_string())
+        server.quit()
+
+        print("📩 Email enviado a", destinatario)
+
+    except Exception as e:
+        print("❌ Error email:", e)
 
 # 🔐 LOGIN
 @app.route("/login", methods=["GET","POST"])
@@ -45,35 +66,17 @@ def login():
 
     return """
     <style>
-        body {font-family:Arial;text-align:center;padding-top:100px;}
+        body {font-family:Arial;text-align:center;padding-top:100px;background:#f4f4f4;}
         input,button{padding:10px;margin:5px;}
     </style>
 
     <h2>🏢 Office Thinking CRM</h2>
-
     <form method="POST">
         <input name="user" placeholder="Usuario"><br>
         <input type="password" name="password" placeholder="Contraseña"><br>
         <button>Entrar</button>
     </form>
     """
-
-# 📤 EXPORTAR CSV
-@app.route("/export")
-def export_csv():
-
-    if not session.get("logged"):
-        return redirect("/login")
-
-    data = load_data()
-
-    def generate():
-        yield "codigo,nombre,servicio,celular,email,fecha,estado_pago,monto\n"
-        for c in data:
-            yield f"{c.get('codigo')},{c.get('nombre')},{c.get('servicio')},{c.get('celular')},{c.get('email')},{c.get('fecha')},{c.get('estado_pago')},{c.get('monto')}\n"
-
-    return Response(generate(), mimetype="text/csv",
-                    headers={"Content-Disposition":"attachment;filename=clientes.csv"})
 
 # 🏠 HOME
 @app.route("/", methods=["GET","POST"])
@@ -84,7 +87,7 @@ def home():
 
     data = load_data()
 
-    # ➕ CLIENTE
+    # ➕ CREAR CLIENTE
     if request.method == "POST":
         cliente = {
             "codigo": generate_code(data),
@@ -103,28 +106,41 @@ def home():
         data.append(cliente)
         save_data(data)
 
-        # 🔔 activar notificación (base)
-        if cliente["estado_pago"] == "Vencido":
-            enviar_notificacion(cliente)
+        # 🔔 EMAIL AUTOMÁTICO SI ESTÁ VENCIDO
+        if cliente["estado_pago"] == "Vencido" and cliente["email"]:
+            enviar_email(
+                cliente["email"],
+                "⚠️ Pago vencido - Office Thinking",
+                f"Hola {cliente['nombre']}, tienes un pago vencido de ${cliente['monto']}."
+            )
 
     hoy = datetime.now().strftime("%Y-%m-%d")
-    manana = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    total = len(data)
+    hoy_count = 0
+    atrasados = 0
+    futuros = 0
 
     total_pagado = 0
     total_pendiente = 0
     total_vencido = 0
 
-    alertas = 0
-
     for c in data:
+        fecha = c.get("fecha")
         estado = c.get("estado_pago","Pendiente")
         monto = float(c.get("monto") or 0)
+
+        if fecha == hoy:
+            hoy_count += 1
+        elif fecha and fecha < hoy:
+            atrasados += 1
+        else:
+            futuros += 1
 
         if estado == "Pagado":
             total_pagado += monto
         elif estado == "Vencido":
             total_vencido += monto
-            alertas += 1
         else:
             total_pendiente += monto
 
@@ -148,17 +164,17 @@ def home():
 
         .container {{ padding:20px; }}
 
+        .dashboard {{
+            display:grid;
+            grid-template-columns: repeat(4,1fr);
+            gap:10px;
+        }}
+
         .box {{
             background:white;
             padding:10px;
             border-radius:10px;
             text-align:center;
-        }}
-
-        .dashboard {{
-            display:grid;
-            grid-template-columns: repeat(3,1fr);
-            gap:10px;
         }}
 
         .card {{
@@ -176,28 +192,35 @@ def home():
             border-radius:5px;
         }}
 
-        a {{
-            text-decoration:none;
-            margin-left:10px;
-        }}
+        a {{ margin-left:10px; text-decoration:none; }}
     </style>
 
     <header>
         <div>🏢 Office Thinking CRM</div>
         <div>
             Usuario: {session.get("user")} |
-            <a href="/export" style="color:white;">📤 Exportar CSV</a> |
             <a href="/logout" style="color:white;">🚪 Cerrar sesión</a>
         </div>
     </header>
 
     <div class="container">
 
-    <h3>🔔 Notificaciones</h3>
+    <h3>📊 Dashboard</h3>
+
     <div class="dashboard">
-        <div class="box">⚠️ Alertas<br><b>{alertas}</b></div>
+        <div class="box">📁 Total<br><b>{total}</b></div>
+        <div class="box">🔥 Hoy<br><b>{hoy_count}</b></div>
+        <div class="box">⚠️ Atrasados<br><b>{atrasados}</b></div>
+        <div class="box">📅 Futuros<br><b>{futuros}</b></div>
+    </div>
+
+    <h3>💰 Finanzas</h3>
+
+    <div class="dashboard">
         <div class="box">💵 Pagado<br><b>${total_pagado}</b></div>
         <div class="box">🟡 Pendiente<br><b>${total_pendiente}</b></div>
+        <div class="box">🔴 Vencido<br><b>${total_vencido}</b></div>
+        <div class="box">📊 Neto<br><b>${total_pagado - total_vencido}</b></div>
     </div>
 
     <h3>➕ Nuevo cliente</h3>
@@ -231,7 +254,7 @@ def home():
 
     for i, c in enumerate(data):
 
-        estado = c.get("estado_pago")
+        estado = c.get("estado_pago","Pendiente")
 
         color = "🟢"
         if estado == "Vencido":

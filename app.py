@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, session
+from flask import Flask, request, redirect, session
 import json, os
 from datetime import datetime, timedelta
 
@@ -41,16 +41,41 @@ def login():
 
     return """
     <style>
-        body{font-family:Arial;text-align:center;padding-top:100px;background:#f4f4f4;}
-        input,button{padding:10px;margin:5px;}
+        body{
+            font-family:Arial;
+            background:#f4f6f9;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+        }
+        .box{
+            background:white;
+            padding:30px;
+            border-radius:12px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.1);
+        }
+        input,button{
+            padding:10px;
+            margin:5px 0;
+            width:100%;
+        }
+        button{
+            background:#2563eb;
+            color:white;
+            border:none;
+            border-radius:6px;
+        }
     </style>
 
-    <h2>🏢 Office Thinking CRM</h2>
-    <form method="POST">
-        <input name="user" placeholder="Usuario"><br>
-        <input type="password" name="password" placeholder="Contraseña"><br>
-        <button>Entrar</button>
-    </form>
+    <div class="box">
+        <h2>🏢 Office Thinking</h2>
+        <form method="POST">
+            <input name="user" placeholder="Usuario">
+            <input type="password" name="password" placeholder="Contraseña">
+            <button>Entrar</button>
+        </form>
+    </div>
     """
 
 # 🏠 HOME
@@ -64,7 +89,6 @@ def home():
 
     hoy = datetime.now().date()
     prox_7 = hoy + timedelta(days=7)
-    ant_7 = hoy - timedelta(days=7)
 
     # ➕ CREAR CLIENTE
     if request.method == "POST":
@@ -81,129 +105,146 @@ def home():
         })
         save_data(data)
 
-    # 📊 CONTADORES
-    hoy_list = []
-    futuro_list = []
-    pasado_list = []
-
-    for c in data:
-
-        try:
-            fecha = datetime.strptime(c.get("fecha",""), "%Y-%m-%d").date()
-        except:
-            continue
-
-        if fecha == hoy:
-            hoy_list.append(c)
-        elif hoy < fecha <= prox_7:
-            futuro_list.append(c)
-        elif ant_7 <= fecha < hoy:
-            pasado_list.append(c)
+    # 📊 ESTADÍSTICAS
+    total = len(data)
+    pagados = sum(1 for c in data if c.get("estado_pago") == "Pagado")
+    pendientes = sum(1 for c in data if c.get("estado_pago") != "Pagado")
+    hoy_count = sum(1 for c in data if c.get("fecha") == hoy.strftime("%Y-%m-%d"))
 
     # 🎨 UI
     html = f"""
     <style>
         body {{
-            font-family: Arial;
             margin:0;
-            background:#f5f5f5;
+            font-family:Arial;
+            background:#f4f6f9;
         }}
 
-        header {{
-            background:#c0392b;
+        .sidebar {{
+            position:fixed;
+            width:220px;
+            height:100%;
+            background:#111827;
             color:white;
-            padding:15px;
-            display:flex;
-            justify-content:space-between;
+            padding:20px;
+        }}
+
+        .sidebar a {{
+            display:block;
+            color:white;
+            text-decoration:none;
+            padding:10px;
+            border-radius:6px;
+        }}
+
+        .sidebar a:hover {{
+            background:#374151;
+        }}
+
+        .main {{
+            margin-left:240px;
+            padding:20px;
         }}
 
         .grid {{
             display:grid;
-            grid-template-columns:repeat(3,1fr);
+            grid-template-columns:repeat(4,1fr);
             gap:10px;
-            padding:10px;
-        }}
-
-        .box {{
-            background:white;
-            padding:10px;
-            border-radius:10px;
-            text-align:center;
         }}
 
         .card {{
             background:white;
-            margin:10px;
-            padding:10px;
-            border-radius:10px;
+            padding:15px;
+            border-radius:12px;
+            box-shadow:0 2px 8px rgba(0,0,0,0.08);
+        }}
+
+        .client {{
+            background:white;
+            padding:15px;
+            margin-top:10px;
+            border-radius:12px;
+            box-shadow:0 2px 8px rgba(0,0,0,0.08);
         }}
 
         input,select,textarea {{
-            padding:6px;
-            margin:3px;
-            width:90%;
+            width:100%;
+            padding:8px;
+            margin:5px 0;
+            border-radius:6px;
+            border:1px solid #ddd;
         }}
 
         button {{
-            padding:8px;
-            background:#c0392b;
+            background:#2563eb;
             color:white;
             border:none;
-            border-radius:5px;
+            padding:10px;
+            border-radius:8px;
         }}
-
-        a {{ margin-left:10px; }}
     </style>
 
-    <header>
-        <div>🏢 Office Thinking CRM</div>
-        <div>
-            Usuario: {session.get("user")} |
-            <a href="/logout" style="color:white;">🚪 Salir</a>
+    <div class="sidebar">
+        <h2>🏢 Office Thinking</h2>
+        <a href="/">📊 Dashboard</a>
+        <a href="#">👥 Clientes</a>
+        <a href="/logout">🚪 Salir</a>
+    </div>
+
+    <div class="main">
+
+        <h2>📊 Dashboard</h2>
+
+        <div class="grid">
+            <div class="card">👥 Total<br><b>{total}</b></div>
+            <div class="card">💰 Pagados<br><b>{pagados}</b></div>
+            <div class="card">⚠️ Pendientes<br><b>{pendientes}</b></div>
+            <div class="card">📅 Hoy<br><b>{hoy_count}</b></div>
         </div>
-    </header>
 
-    <div class="grid">
-        <div class="box">📅 Hoy<br><b>{len(hoy_list)}</b></div>
-        <div class="box">➡️ Próximos<br><b>{len(futuro_list)}</b></div>
-        <div class="box">⬅️ Pasados<br><b>{len(pasado_list)}</b></div>
-    </div>
+        <div class="card" style="margin-top:20px;">
+            <h3>➕ Nuevo cliente</h3>
 
-    <div class="card">
-        <h3>➕ Nuevo cliente</h3>
+            <form method="POST">
+                <input name="nombre" placeholder="Nombre">
+                <input name="servicio" placeholder="Servicio">
+                <input name="celular" placeholder="Celular">
+                <input name="email" placeholder="Email">
+                <input type="date" name="fecha">
+                <input name="monto" placeholder="Monto">
 
-        <form method="POST">
-            <input name="nombre" placeholder="Nombre"><br>
-            <input name="servicio" placeholder="Servicio"><br>
-            <input name="celular" placeholder="Celular"><br>
-            <input name="email" placeholder="Email"><br>
-            <input type="date" name="fecha"><br>
-            <input name="monto" placeholder="Monto"><br>
+                <select name="estado_pago">
+                    <option>Pendiente</option>
+                    <option>Pagado</option>
+                    <option>Vencido</option>
+                </select>
 
-            <select name="estado_pago">
-                <option>Pendiente</option>
-                <option>Pagado</option>
-                <option>Vencido</option>
-            </select><br>
+                <textarea name="notas" placeholder="Notas"></textarea>
 
-            <textarea name="notas" placeholder="Notas"></textarea><br>
+                <button>Guardar</button>
+            </form>
+        </div>
 
-            <button>Guardar</button>
-        </form>
-    </div>
-
-    <h3 style="margin-left:10px;">📋 Clientes</h3>
+        <h3>📋 Clientes</h3>
     """
 
     for i, c in enumerate(data):
 
+        estado = c.get("estado_pago")
+
+        color = "🟢"
+        if estado == "Vencido":
+            color = "🔴"
+        elif estado == "Pendiente":
+            color = "🟡"
+
         html += f"""
-        <div class="card">
-            <b>{c.get('codigo')}</b> - {c.get('nombre')}<br>
+        <div class="client">
+            <b>{c.get('codigo')}</b> - {c.get('nombre')} {color}<br>
             📅 {c.get('fecha')} | 💰 {c.get('monto')}<br>
             📱 {c.get('celular')} | 📧 {c.get('email')}<br>
 
-            <a href="/edit/{i}">✏️ Editar</a>
+            <a href="/edit/{i}">✏️ Editar</a> |
             <a href="/delete/{i}">🗑️ Eliminar</a>
         </div>
         """
@@ -211,7 +252,7 @@ def home():
     html += "</div>"
     return html
 
-# ✏️ EDITAR (FIX DEFINITIVO)
+# ✏️ EDITAR
 @app.route("/edit/<int:index>", methods=["GET","POST"])
 def edit(index):
 

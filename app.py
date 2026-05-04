@@ -1,13 +1,12 @@
 from flask import Flask, request, redirect, session
 import json, os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "office_thinking_key"
 
 FILE = "data.json"
 
-# 👥 USERS
 USERS = {
     "paula": "paula1",
     "alfredo": "alfredo1"
@@ -27,55 +26,10 @@ def save_data(data):
 def generate_code(data):
     return f"C{len(data)+1:04d}"
 
-# 🔐 LOGIN
-@app.route("/login", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        u = request.form.get("user")
-        p = request.form.get("password")
+# 🎨 TEMPLATE BASE
+def layout(content):
 
-        if u in USERS and USERS[u] == p:
-            session["logged"] = True
-            session["user"] = u
-            return redirect("/")
-
-    return """
-    <style>
-    body{font-family:Arial;background:#f4f6f9;display:flex;justify-content:center;align-items:center;height:100vh}
-    .box{background:white;padding:30px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
-    input,button{padding:10px;width:100%;margin:5px 0}
-    button{background:#2563eb;color:white;border:none}
-    </style>
-
-    <div class="box">
-        <h2>🏢 Office Thinking</h2>
-        <form method="POST">
-            <input name="user" placeholder="Usuario">
-            <input type="password" name="password" placeholder="Contraseña">
-            <button>Entrar</button>
-        </form>
-    </div>
-    """
-
-# 🏠 DASHBOARD PRINCIPAL
-@app.route("/")
-def home():
-
-    if not session.get("logged"):
-        return redirect("/login")
-
-    data = load_data()
-
-    hoy = datetime.now().date()
-    prox = hoy + timedelta(days=7)
-    pasado = hoy - timedelta(days=7)
-
-    # 📊 métricas
-    total = len(data)
-    pagados = sum(1 for c in data if c.get("estado_pago") == "Pagado")
-    pendientes = sum(1 for c in data if c.get("estado_pago") != "Pagado")
-
-    html = f"""
+    return f"""
     <style>
         body{{margin:0;font-family:Arial;background:#f4f6f9}}
 
@@ -101,17 +55,12 @@ def home():
 
         .main{{margin-left:240px;padding:20px}}
 
-        .grid{{
-            display:grid;
-            grid-template-columns:repeat(4,1fr);
-            gap:10px;
-        }}
-
         .card{{
             background:white;
             padding:15px;
             border-radius:12px;
             box-shadow:0 2px 8px rgba(0,0,0,0.08);
+            margin-top:10px;
         }}
 
         input,select,textarea{{
@@ -127,14 +76,6 @@ def home():
             padding:10px;
             border-radius:8px;
         }}
-
-        .client{{
-            background:white;
-            padding:15px;
-            margin-top:10px;
-            border-radius:12px;
-            box-shadow:0 2px 8px rgba(0,0,0,0.08);
-        }}
     </style>
 
     <div class="sidebar">
@@ -147,28 +88,57 @@ def home():
     </div>
 
     <div class="main">
-        <h2>📊 Dashboard</h2>
-
-        <div class="grid">
-            <div class="card">👥 Total<br><b>{total}</b></div>
-            <div class="card">💰 Pagados<br><b>{pagados}</b></div>
-            <div class="card">⚠️ Pendientes<br><b>{pendientes}</b></div>
-            <div class="card">📅 Hoy<br><b>{sum(1 for c in data if c.get('fecha') == hoy.strftime('%Y-%m-%d'))}</b></div>
-        </div>
-
-        <div class="card" style="margin-top:20px;">
-            <h3>🚀 Acceso rápido</h3>
-            <p>Usa el menú lateral para navegar entre módulos del sistema.</p>
-        </div>
+        {content}
     </div>
     """
 
-    return html
+# 🔐 LOGIN
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        u = request.form.get("user")
+        p = request.form.get("password")
+
+        if u in USERS and USERS[u] == p:
+            session["logged"] = True
+            return redirect("/")
+
+    return """
+    <div style="display:flex;justify-content:center;align-items:center;height:100vh">
+        <form method="POST">
+            <h2>Office Thinking</h2>
+            <input name="user"><br>
+            <input type="password" name="password"><br>
+            <button>Entrar</button>
+        </form>
+    </div>
+    """
+
+# 📊 DASHBOARD
+@app.route("/")
+def home():
+    if not session.get("logged"):
+        return redirect("/login")
+
+    data = load_data()
+
+    total = len(data)
+    pagados = sum(1 for c in data if c.get("estado_pago") == "Pagado")
+    pendientes = total - pagados
+
+    content = f"""
+    <h2>Dashboard</h2>
+
+    <div class="card">👥 Total clientes: {total}</div>
+    <div class="card">💰 Pagados: {pagados}</div>
+    <div class="card">⚠️ Pendientes: {pendientes}</div>
+    """
+
+    return layout(content)
 
 # 👥 CLIENTES
 @app.route("/clients", methods=["GET","POST"])
 def clients():
-
     if not session.get("logged"):
         return redirect("/login")
 
@@ -178,24 +148,18 @@ def clients():
         data.append({
             "codigo": generate_code(data),
             "nombre": request.form.get("nombre"),
-            "servicio": request.form.get("servicio"),
-            "celular": request.form.get("celular"),
             "email": request.form.get("email"),
             "fecha": request.form.get("fecha"),
             "monto": request.form.get("monto"),
-            "estado_pago": request.form.get("estado_pago"),
-            "notas": request.form.get("notas")
+            "estado_pago": request.form.get("estado_pago")
         })
         save_data(data)
 
-    html = "<div style='margin-left:240px;padding:20px;font-family:Arial'>"
-    html += "<h2>👥 Clientes</h2>"
+    content = "<h2>Clientes</h2>"
 
-    html += """
-    <form method="POST">
+    content += """
+    <form method="POST" class="card">
         <input name="nombre" placeholder="Nombre">
-        <input name="servicio" placeholder="Servicio">
-        <input name="celular" placeholder="Celular">
         <input name="email" placeholder="Email">
         <input type="date" name="fecha">
         <input name="monto" placeholder="Monto">
@@ -204,72 +168,66 @@ def clients():
             <option>Pagado</option>
             <option>Vencido</option>
         </select>
-        <textarea name="notas"></textarea>
         <button>Guardar</button>
     </form>
     """
 
-    for i,c in enumerate(data):
-
-        html += f"""
-        <div style="background:white;margin-top:10px;padding:10px;border-radius:10px">
+    for i, c in enumerate(data):
+        content += f"""
+        <div class="card">
             <b>{c.get('codigo')}</b> - {c.get('nombre')}<br>
-            📅 {c.get('fecha')} | 💰 {c.get('monto')}<br>
-            📱 {c.get('celular')} | 📧 {c.get('email')}<br>
-
+            {c.get('email')} | {c.get('monto')}
+            <br>
             <a href="/edit/{i}">Editar</a> |
             <a href="/delete/{i}">Eliminar</a>
         </div>
         """
 
-    html += "</div>"
-    return html
+    return layout(content)
 
 # 📅 AGENDA
 @app.route("/agenda")
 def agenda():
-
     if not session.get("logged"):
         return redirect("/login")
 
     data = load_data()
-
     hoy = datetime.now().date()
 
-    html = "<div style='margin-left:240px;padding:20px;font-family:Arial'>"
-    html += "<h2>📅 Agenda</h2>"
+    content = "<h2>Agenda</h2>"
 
     for c in data:
         try:
             fecha = datetime.strptime(c.get("fecha",""), "%Y-%m-%d").date()
+            dias = (fecha - hoy).days
         except:
             continue
 
-        diff = (fecha - hoy).days
-
-        html += f"""
-        <div style="background:white;margin-top:10px;padding:10px;border-radius:10px">
-            {c.get('nombre')} - {c.get('fecha')} ({diff} días)
+        content += f"""
+        <div class="card">
+            {c.get('nombre')} - {c.get('fecha')} ({dias} días)
         </div>
         """
 
-    html += "</div>"
-    return html
+    return layout(content)
 
-# 📈 REPORTES (BASE PARA EMAIL FUTURO)
+# 📈 REPORTES
 @app.route("/reports")
 def reports():
-
     if not session.get("logged"):
         return redirect("/login")
 
-    return """
-    <div style="margin-left:240px;padding:20px;font-family:Arial">
-        <h2>📈 Reportes</h2>
-        <p>📩 Aquí se integrarán correos automáticos programados</p>
-        <p>⏰ Ejemplo futuro: enviar resumen diario a las 18:00 hrs</p>
+    content = """
+    <h2>Reportes</h2>
+    <div class="card">
+        📩 Próximamente:
+        <br>- correos automáticos
+        <br>- resumen diario
+        <br>- programación de envíos
     </div>
     """
+
+    return layout(content)
 
 # ✏️ EDITAR
 @app.route("/edit/<int:index>", methods=["GET","POST"])
@@ -279,40 +237,45 @@ def edit(index):
         return redirect("/login")
 
     data = load_data()
-
     c = data[index]
 
     if request.method == "POST":
-
-        for k in ["nombre","servicio","celular","email","fecha","monto","estado_pago","notas"]:
-            c[k] = request.form.get(k,"")
+        c["nombre"] = request.form.get("nombre")
+        c["email"] = request.form.get("email")
+        c["fecha"] = request.form.get("fecha")
+        c["monto"] = request.form.get("monto")
+        c["estado_pago"] = request.form.get("estado_pago")
 
         data[index] = c
         save_data(data)
 
         return redirect("/clients")
 
-    return f"""
-    <div style="margin-left:240px;padding:20px;font-family:Arial">
-        <h2>✏️ Editar</h2>
+    content = f"""
+    <h2>Editar cliente</h2>
 
-        <form method="POST">
-            <input name="nombre" value="{c.get('nombre','')}"><br>
-            <input name="servicio" value="{c.get('servicio','')}"><br>
-            <input name="celular" value="{c.get('celular','')}"><br>
-            <input name="email" value="{c.get('email','')}"><br>
-            <input name="fecha" value="{c.get('fecha','')}"><br>
-            <input name="monto" value="{c.get('monto','')}"><br>
-            <textarea name="notas">{c.get('notas','')}</textarea><br>
-            <button>Guardar</button>
-        </form>
-    </div>
+    <form method="POST" class="card">
+        <input name="nombre" value="{c.get('nombre')}">
+        <input name="email" value="{c.get('email')}">
+        <input name="fecha" value="{c.get('fecha')}">
+        <input name="monto" value="{c.get('monto')}">
+
+        <select name="estado_pago">
+            <option>{c.get('estado_pago')}</option>
+            <option>Pendiente</option>
+            <option>Pagado</option>
+            <option>Vencido</option>
+        </select>
+
+        <button>Guardar</button>
+    </form>
     """
+
+    return layout(content)
 
 # 🗑️ DELETE
 @app.route("/delete/<int:index>")
 def delete(index):
-
     if session.get("logged"):
         data = load_data()
         if 0 <= index < len(data):

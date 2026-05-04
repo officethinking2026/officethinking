@@ -26,23 +26,30 @@ def save_data(data):
 def generate_code(data):
     return f"C{len(data)+1:04d}"
 
-# 🎨 TEMPLATE BASE
+# 🎨 BASE UI (CANADA BACKGROUND)
 def layout(content):
 
     return f"""
     <style>
-        body{{margin:0;font-family:Arial;background:#f4f6f9}}
+        body {{
+            margin:0;
+            font-family:Arial;
+            background: linear-gradient(rgba(255,255,255,0.9), rgba(255,255,255,0.9)),
+                        url('https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Canada.svg');
+            background-size:cover;
+            background-attachment:fixed;
+        }}
 
-        .sidebar{{
+        .sidebar {{
             position:fixed;
-            width:220px;
+            width:230px;
             height:100%;
             background:#111827;
             color:white;
             padding:20px;
         }}
 
-        .sidebar a{{
+        .sidebar a {{
             display:block;
             color:white;
             text-decoration:none;
@@ -51,30 +58,44 @@ def layout(content):
             margin-top:5px;
         }}
 
-        .sidebar a:hover{{background:#374151}}
+        .sidebar a:hover {{
+            background:#374151;
+        }}
 
-        .main{{margin-left:240px;padding:20px}}
+        .main {{
+            margin-left:250px;
+            padding:20px;
+        }}
 
-        .card{{
+        .card {{
             background:white;
             padding:15px;
             border-radius:12px;
-            box-shadow:0 2px 8px rgba(0,0,0,0.08);
+            box-shadow:0 3px 10px rgba(0,0,0,0.1);
             margin-top:10px;
         }}
 
-        input,select,textarea{{
+        input,select,textarea {{
             width:100%;
             padding:8px;
             margin:5px 0;
+            border-radius:6px;
+            border:1px solid #ccc;
         }}
 
-        button{{
+        button {{
             background:#2563eb;
             color:white;
             border:none;
             padding:10px;
             border-radius:8px;
+            cursor:pointer;
+        }}
+
+        .top {{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
         }}
     </style>
 
@@ -106,9 +127,9 @@ def login():
     return """
     <div style="display:flex;justify-content:center;align-items:center;height:100vh">
         <form method="POST">
-            <h2>Office Thinking</h2>
-            <input name="user"><br>
-            <input type="password" name="password"><br>
+            <h2>Office Thinking 🇨🇦</h2>
+            <input name="user" placeholder="Usuario"><br>
+            <input type="password" name="password" placeholder="Contraseña"><br>
             <button>Entrar</button>
         </form>
     </div>
@@ -127,7 +148,7 @@ def home():
     pendientes = total - pagados
 
     content = f"""
-    <h2>Dashboard</h2>
+    <h2>📊 Dashboard</h2>
 
     <div class="card">👥 Total clientes: {total}</div>
     <div class="card">💰 Pagados: {pagados}</div>
@@ -136,50 +157,62 @@ def home():
 
     return layout(content)
 
-# 👥 CLIENTES
+# 👥 CLIENTES + BUSCADOR
 @app.route("/clients", methods=["GET","POST"])
 def clients():
     if not session.get("logged"):
         return redirect("/login")
 
     data = load_data()
+    query = request.args.get("q","").lower()
 
     if request.method == "POST":
         data.append({
             "codigo": generate_code(data),
-            "nombre": request.form.get("nombre"),
-            "email": request.form.get("email"),
-            "fecha": request.form.get("fecha"),
-            "monto": request.form.get("monto"),
-            "estado_pago": request.form.get("estado_pago")
+            "nombre": request.form.get("nombre",""),
+            "email": request.form.get("email",""),
+            "fecha": request.form.get("fecha",""),
+            "monto": request.form.get("monto",""),
+            "estado_pago": request.form.get("estado_pago","Pendiente")
         })
         save_data(data)
 
-    content = "<h2>Clientes</h2>"
+    content = "<h2>👥 Clientes</h2>"
 
     content += """
+    <form method="GET" class="card">
+        <input name="q" placeholder="Buscar cliente">
+        <button>Buscar</button>
+    </form>
+
     <form method="POST" class="card">
         <input name="nombre" placeholder="Nombre">
         <input name="email" placeholder="Email">
         <input type="date" name="fecha">
         <input name="monto" placeholder="Monto">
+
         <select name="estado_pago">
             <option>Pendiente</option>
             <option>Pagado</option>
             <option>Vencido</option>
         </select>
+
         <button>Guardar</button>
     </form>
     """
 
-    for i, c in enumerate(data):
+    for i,c in enumerate(data):
+
+        if query and query not in c.get("nombre","").lower():
+            continue
+
         content += f"""
         <div class="card">
             <b>{c.get('codigo')}</b> - {c.get('nombre')}<br>
-            {c.get('email')} | {c.get('monto')}
-            <br>
-            <a href="/edit/{i}">Editar</a> |
-            <a href="/delete/{i}">Eliminar</a>
+            📧 {c.get('email')} | 💰 {c.get('monto')}<br>
+
+            <a href="/edit/{i}">✏️ Editar</a> |
+            <a href="/delete/{i}">🗑️ Eliminar</a>
         </div>
         """
 
@@ -194,7 +227,7 @@ def agenda():
     data = load_data()
     hoy = datetime.now().date()
 
-    content = "<h2>Agenda</h2>"
+    content = "<h2>📅 Agenda</h2>"
 
     for c in data:
         try:
@@ -211,19 +244,20 @@ def agenda():
 
     return layout(content)
 
-# 📈 REPORTES
+# 📈 REPORTES (BASE EMAIL)
 @app.route("/reports")
 def reports():
     if not session.get("logged"):
         return redirect("/login")
 
     content = """
-    <h2>Reportes</h2>
+    <h2>📈 Reportes</h2>
+
     <div class="card">
-        📩 Próximamente:
+        📩 Próximo nivel:
         <br>- correos automáticos
-        <br>- resumen diario
-        <br>- programación de envíos
+        <br>- programación por hora
+        <br>- recordatorios diarios
     </div>
     """
 
@@ -237,28 +271,27 @@ def edit(index):
         return redirect("/login")
 
     data = load_data()
+
+    if index < 0 or index >= len(data):
+        return redirect("/clients")
+
     c = data[index]
 
     if request.method == "POST":
-        c["nombre"] = request.form.get("nombre")
-        c["email"] = request.form.get("email")
-        c["fecha"] = request.form.get("fecha")
-        c["monto"] = request.form.get("monto")
-        c["estado_pago"] = request.form.get("estado_pago")
+        for k in ["nombre","email","fecha","monto","estado_pago"]:
+            c[k] = request.form.get(k,"")
 
-        data[index] = c
         save_data(data)
-
         return redirect("/clients")
 
     content = f"""
-    <h2>Editar cliente</h2>
+    <h2>✏️ Editar cliente</h2>
 
     <form method="POST" class="card">
-        <input name="nombre" value="{c.get('nombre')}">
-        <input name="email" value="{c.get('email')}">
-        <input name="fecha" value="{c.get('fecha')}">
-        <input name="monto" value="{c.get('monto')}">
+        <input name="nombre" value="{c.get('nombre','')}">
+        <input name="email" value="{c.get('email','')}">
+        <input name="fecha" value="{c.get('fecha','')}">
+        <input name="monto" value="{c.get('monto','')}">
 
         <select name="estado_pago">
             <option>{c.get('estado_pago')}</option>
